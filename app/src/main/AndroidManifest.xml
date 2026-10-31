@@ -3,6 +3,7 @@
     xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />
     <!-- Только чтение: какие приложения чаще используются и сколько места занимают. Пользователь включает вручную в настройках. -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
@@ -63,7 +64,7 @@
 
     <application
         android:allowBackup="true"
-        android:label="Музыка"
+        android:label="Harmonia"
         android:icon="@mipmap/ic_music"
         android:roundIcon="@mipmap/ic_music"
         android:theme="@style/Theme.Assistant">
@@ -82,7 +83,7 @@
             android:exported="true"
             android:icon="@mipmap/ic_music"
             android:roundIcon="@mipmap/ic_music"
-            android:label="Музыка"
+            android:label="Harmonia"
             android:launchMode="singleTask"
             android:taskAffinity="com.example.assistant.music"
             android:theme="@style/Theme.Music">
