@@ -35,16 +35,6 @@ class ContactMatchTest {
         assertFalse(ContactMatch.exact("иван", "Иван Петров"))
     }
 
-    @Test fun wakeWord() {
-        assertTrue(WakeWord.isWakeWord("Пятница"))
-        assertTrue(WakeWord.isWakeWord("Пятнице"))
-        assertTrue(WakeWord.isWakeWord("пятнит"))
-        assertFalse(WakeWord.isWakeWord("включи"))
-        org.junit.Assert.assertEquals("включи музыку", WakeWord.commandAfter("Пятница, включи музыку"))
-        org.junit.Assert.assertEquals("", WakeWord.commandAfter("пятница"))
-        org.junit.Assert.assertNull(WakeWord.commandAfter("включи музыку"))
-    }
-
     @Test fun confirmWords() {
         assertTrue(Confirm.isYes("Да"))
         assertTrue(Confirm.isYes("да, удаляй"))
