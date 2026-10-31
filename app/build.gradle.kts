@@ -9,7 +9,7 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.example.assistant"
+        applicationId = "com.teamcargo.music"
         minSdk = 26
         targetSdk = 34
         versionCode = 38
