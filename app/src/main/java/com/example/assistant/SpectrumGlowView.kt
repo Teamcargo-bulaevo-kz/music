@@ -67,6 +67,6 @@ class SpectrumGlowView @JvmOverloads constructor(
             paint.clearShadowLayer()
             canvas.drawRoundRect(rect, barWidth / 2, barWidth / 2, paint)
         }
-        postInvalidateOnAnimation()
+        if (data == null) postInvalidateOnAnimation()
     }
 }
