@@ -93,7 +93,7 @@ class SettingsActivity : AppCompatActivity() {
             prefs.edit().putBoolean("suggestions_enabled", it).apply()
         }
 
-        section("Функции команд", "Каждую возможность можно отключить отдельно. Выключенные функции не выполняются даже по голосовой команде.")
+        section("Функции команд", "Каждую возможность можно отключить отдельно. Выключенные функции не выполняются даже по текстовой команде.")
         val featureGroups = listOf(
             "Телефон и приложения" to listOf(
                 "set_alarm" to "Будильники",
