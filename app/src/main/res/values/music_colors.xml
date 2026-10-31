@@ -7,5 +7,5 @@
     <color name="music_accent_soft">#338B5CF6</color>
     <color name="music_text">#F4F4F8</color>
     <color name="music_text_dim">#9A9AAB</color>
-    <color name="music_icon_bg">#FF6B4A</color>
+    <color name="music_icon_bg">#25165C</color>
 </resources>
