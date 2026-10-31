@@ -11,7 +11,7 @@
         <TextView
             android:id="@+id/screenTitle" android:layout_width="0dp" android:layout_height="wrap_content"
             android:ellipsize="end" android:maxLines="1"
-            android:layout_weight="1" android:text="Музыка" android:textColor="@color/music_text"
+            android:layout_weight="1" android:text="Harmonia" android:textColor="@color/music_text"
             android:textSize="28sp" android:textStyle="bold" />
         <ImageButton
             android:id="@+id/shuffleAll" android:layout_width="48dp" android:layout_height="48dp"
