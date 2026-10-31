@@ -36,6 +36,7 @@ object LocalMoodAnalyzer {
             var inputDone = false; var outputDone = false
             var channels = input.getInteger(MediaFormat.KEY_CHANNEL_COUNT).coerceIn(1, 8)
             var rate = input.getInteger(MediaFormat.KEY_SAMPLE_RATE)
+            var sourceFrames = 0L
             while (!outputDone && out.size < 1_500_000) {
                 if (!inputDone) {
                     val ix = codec.dequeueInputBuffer(10_000)
