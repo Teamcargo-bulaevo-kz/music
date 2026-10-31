@@ -32,6 +32,20 @@ class LocalMoodAnalyzerTest {
         assertEquals(2.0, features.durationSeconds, 0.1)
     }
 
+    @Test fun splitsLongTrackIntoOverlappingMoodSegments() {
+        val rate = 11025
+        val samples = FloatArray(rate * 45) { i ->
+            val amplitude = if (i < rate * 20) 0.04 else 0.30
+            (amplitude * sin(2.0 * PI * 220.0 * i / rate)).toFloat()
+        }
+        val segments = LocalMoodAnalyzer.analyzeSegments(samples, rate)
+        assertEquals(4, segments.size)
+        assertEquals(0, segments.first().startSeconds)
+        assertEquals(45, segments.last().endSeconds)
+        assertTrue(segments.all { it.endSeconds > it.startSeconds })
+        assertTrue(segments.all { it.scores.values.sum() == 100 })
+        assertTrue(segments.all { it.valence in 0..100 && it.arousal in 0..100 && it.tension in 0..100 })
+    }
     @Test fun detectsTrackLevelDynamicsAcrossLongerAudio() {
         val rate = 22050
         val samples = FloatArray(rate * 8) { i ->
