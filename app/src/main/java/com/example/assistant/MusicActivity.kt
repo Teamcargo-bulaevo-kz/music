@@ -396,7 +396,12 @@ class MusicActivity : AppCompatActivity() {
     private fun tagsLine(t: MusicTrack): String {
         val tg = MusicTags.get(this, t)
         if (tg == null || !MusicTags.isTagged(tg)) return ""
-        val moods = tg.moods.joinToString(", ") { MusicTags.moodShort[it]?.lowercase() ?: it }
+        val moods = if (tg.moodScores.isNotEmpty()) {
+            tg.moodScores.entries.sortedByDescending { it.value }.take(2)
+                .joinToString(" · ") { entry ->
+                    (MusicTags.moodShort[entry.key]?.lowercase() ?: entry.key) + " " + entry.value + "%"
+                }
+        } else tg.moods.joinToString(", ") { MusicTags.moodShort[it]?.lowercase() ?: it }
         return "$moods · ${tg.genreText.lowercase()}"
     }
 
