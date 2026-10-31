@@ -54,6 +54,9 @@ class MusicService : Service() {
     private var session: MediaSession? = null
     private var player: MediaPlayer? = null
 
+    /** Audio session активного трека для спектрального визуализатора экрана плеера. */
+    val audioSessionId: Int get() = player?.audioSessionId ?: 0
+
     private var prepared = false
     private var wantPlay = true
 
