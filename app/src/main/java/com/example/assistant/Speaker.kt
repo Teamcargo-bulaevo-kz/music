@@ -8,7 +8,7 @@ import java.util.Locale
 
 data class VoiceOption(val name: String, val label: String)
 
-/** Озвучка ответов: голос и скорость настраиваются. Для голосовых команд из шторки и плитки говорит всегда. */
+/** Озвучка ответов: голос и скорость настраиваются. */
 object Speaker {
 
     private const val PREFS = "assistant_prefs"
@@ -21,7 +21,7 @@ object Speaker {
     @Volatile private var ready = false
     private val waiting = ArrayList<(TextToSpeech) -> Unit>()
 
-    /** Идёт ли озвучка. Пока ассистент говорит (и ещё чуть-чуть после), микрофон слова активации ничего не слушает. */
+    /** Проверяет, идёт ли озвучка или короткая пауза после неё. */
     @Volatile private var speakingSince = 0L
     @Volatile private var lastEnd = 0L
     private const val TAIL_MS = 400L
