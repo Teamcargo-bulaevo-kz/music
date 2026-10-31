@@ -302,7 +302,7 @@ object MusicTags {
         val base = loaded(context)[key]
             ?: TrackTags(genre = "other", mood = "calm", energy = 3, confidence = 0, artist = track.artist, title = track.title, album = track.album)
         var updated = change(base)
-        if (manual) updated = updated.copy(edited = true, confidence = 100, source = TrackTags.SOURCE_USER)
+        if (manual) updated = updated.copy(edited = true, confidence = 100, source = TrackTags.SOURCE_USER, moodScores = emptyMap())
         val withNames = updated.copy(
             artist = updated.artist.ifBlank { track.artist }, title = updated.title.ifBlank { track.title },
             album = updated.album.ifBlank { track.album }
