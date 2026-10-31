@@ -29,5 +29,22 @@ class LocalMoodAnalyzerTest {
         assertTrue(features.rms > 0.1)
         assertTrue(features.centroid > 100.0)
         assertTrue(features.count > 0)
+        assertEquals(2.0, features.durationSeconds, 0.1)
+    }
+
+    @Test fun detectsTrackLevelDynamicsAcrossLongerAudio() {
+        val rate = 22050
+        val samples = FloatArray(rate * 8) { i ->
+            val amplitude = if (i < rate * 4) 0.04 else 0.35
+            (amplitude * sin(2.0 * PI * 440.0 * i / rate)).toFloat()
+        }
+        val features = LocalMoodAnalyzer.extractFeatures(samples, rate)
+        assertEquals(8.0, features.durationSeconds, 0.1)
+        assertTrue("Expected a change in dynamics between sections", features.variation > 0.2)
+        val result = LocalMoodAnalyzer.classify(features)
+        assertTrue(result.valence in 0..100)
+        assertTrue(result.arousal in 0..100)
+        assertTrue(result.tension in 0..100)
+        assertTrue(result.danceability in 0..100)
     }
 }
