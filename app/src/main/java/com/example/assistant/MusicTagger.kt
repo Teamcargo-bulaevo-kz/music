@@ -15,7 +15,7 @@ import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
- * Сам размечает музыку: жанр, настроения, энергичность, темп, описание.
+ * Сам размечает музыку: жанр из ID3, настроения по акустике, энергичность и темп.
  * 1) читает таблицу Музыка.xlsx, если она уже есть (после переустановки);
  * 2) декодирует аудио и оценивает акустические признаки локальным алгоритмом;
  * интернет и внешние модели не нужны.
@@ -265,7 +265,7 @@ object MusicTagger {
         val tagged = music.count { MusicTags.isTagged(MusicTags.get(context, it)) }
         val review = music.count { val t = MusicTags.get(context, it); t != null && MusicTags.isTagged(t) && t.needsReview }
         val error = lastError
-        val title = if (error == null) "Музыка размечена" else "Разметка приостановлена"
+        val title = if (error == null || done >= total) "Музыка обработана" else "Разметка приостановлена"
         val text = buildString {
             append("Размечено $tagged из ${music.size}.")
             if (review > 0) append(" Проверь $review песен, где я не уверен.")
