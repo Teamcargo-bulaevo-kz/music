@@ -27,13 +27,15 @@ data class TrackTags(
     val note: String = "",
     val artist: String = "",
     val title: String = "",
-    val album: String = ""
+    val album: String = "",
+    val moodScores: Map<String, Int> = emptyMap()
 ) {
     companion object {
         const val SOURCE_AI = "ai"
         const val SOURCE_WEB = "web"
         const val SOURCE_USER = "user"
         const val SOURCE_IMPORT = "import"
+        const val SOURCE_LOCAL = "local"
     }
 
     /** Подпись жанра для людей: свободный текст, если есть, иначе из словаря. */
@@ -228,6 +230,7 @@ object MusicTags {
         .put("gl", v.genreLabel).put("t", v.tempo).put("d", v.description).put("c", v.confidence)
         .put("s", v.source).put("l", v.liked).put("ed", v.edited).put("w", v.webTried).put("at", v.aiTried).put("n", v.note)
         .put("ar", v.artist).put("ti", v.title).put("al", v.album)
+        .put("mp", JSONObject().apply { for ((key, score) in v.moodScores) put(key, score) })
 
     private fun fromJson(o: JSONObject): TrackTags {
         val mood = o.optString("m", "calm")
@@ -239,7 +242,12 @@ object MusicTags {
             description = o.optString("d"), confidence = o.optInt("c", 70), source = o.optString("s", TrackTags.SOURCE_AI),
             liked = o.optInt("l", 0), edited = o.optBoolean("ed", false), webTried = o.optBoolean("w", false),
             aiTried = o.optBoolean("at", false),
-            note = o.optString("n"), artist = o.optString("ar"), title = o.optString("ti"), album = o.optString("al")
+            note = o.optString("n"), artist = o.optString("ar"), title = o.optString("ti"), album = o.optString("al"),
+            moodScores = o.optJSONObject("mp")?.let { scores ->
+                val values = LinkedHashMap<String, Int>()
+                for (key in scores.keys()) if (key in this.moods) values[key] = scores.optInt(key).coerceIn(0, 100)
+                values
+            } ?: emptyMap()
         )
     }
 
