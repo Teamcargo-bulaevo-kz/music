@@ -48,8 +48,15 @@ jobs:
           gradle assembleDebug --stacktrace --info 2>&1 | tee gradle-build.log
           exit ${PIPESTATUS[0]}
 
-      - name: Upload APK
+      - name: Build release APK (R8 + resource shrinking)
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        run: gradle assembleRelease --stacktrace --info
+
+      - name: Upload APKs
         uses: actions/upload-artifact@v4
         with:
-          name: assistant-debug-apk
-          path: app/build/outputs/apk/debug/app-debug.apk
+          name: assistant-apks
+          path: |
+            app/build/outputs/apk/debug/app-debug.apk
+            app/build/outputs/apk/release/app-release-unsigned.apk
