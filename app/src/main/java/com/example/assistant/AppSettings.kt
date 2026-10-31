@@ -58,7 +58,7 @@ object AppSettings {
     fun theme(context: Context): String =
         prefs(context).getString(THEME, "system").let { if (it == "light" || it == "dark") it!! else "system" }
 
-    /** Применяет сохранённую тему; вызывается при старте процесса, чтобы тема была верной с любого входа. */
+    /** Применяет сохранённую тему при запуске процесса. */
     fun applyTheme(context: Context) {
         AppCompatDelegate.setDefaultNightMode(
             when (theme(context)) {
@@ -85,7 +85,7 @@ object AppSettings {
         listOf(
             REQUEST_TIMEOUT_S, CONNECT_TIMEOUT_S, RETRY_WAIT_S, CHAT_TEXT_SP, FONT_SCALE
         ).forEach { editor.remove(it.key) }
-        editor.remove(THEME).remove("command_window_ms")
+        editor.remove(THEME)
         p.all.keys.filter { it.startsWith("feature_") }.forEach { editor.remove(it) }
         editor.apply()
         applyTheme(context)
