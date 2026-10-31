@@ -182,11 +182,16 @@ object LocalMoodAnalyzer {
         if (variance < 1e-12) return 0.0 to 0
         val scale=sqrt(variance); val x=onsets.map{((it-mean)/scale).coerceIn(-4.0,4.0)}
         var best=0.0;var bpm=0
-        for(candidate in 60..180){val lag=(fps*60/candidate).roundToInt();var cross=0.0;var a=0.0;var b=0.0
-            for(i in lag until x.size){cross+=x[i]*x[i-lag];a+=x[i]*x[i];b+=x[i-lag]*x[i-lag]}
-            val corr=if(a>0&&b>0)cross/sqrt(a*b)else 0.0
+        val correlations = ArrayList<Pair<Int, Double>>()
+        for(candidate in 60..180){val lag=(fps*60/candidate).roundToInt();var cross=0.0;var aa=0.0;var bb=0.0
+            for(i in lag until x.size){cross+=x[i]*x[i-lag];aa+=x[i]*x[i];bb+=x[i-lag]*x[i-lag]}
+            val corr=if(aa>0&&bb>0)cross/sqrt(aa*bb)else 0.0
+            correlations += candidate to corr
             if(corr>best){best=corr;bpm=candidate}
-        };return best.coerceIn(0.0,1.0) to bpm
+        }
+        // Если 60 и 120 BPM одинаково хорошо объясняют атаки, предпочитаем основной быстрый пульс.
+        val selected = correlations.filter { it.second >= best * 0.985 }.maxByOrNull { it.first }
+        return best.coerceIn(0.0,1.0) to (selected?.first ?: bpm)
     }
 
     /** Процентное распределение оценок: сумма ровно 100. Это не медицинская и не объективная вероятность. */
