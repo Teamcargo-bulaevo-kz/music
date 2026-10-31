@@ -5,6 +5,16 @@ import org.json.JSONArray
 import org.json.JSONObject
 import java.io.File
 
+data class MoodSegment(
+    val startSeconds: Int,
+    val endSeconds: Int,
+    val mood: String,
+    val valence: Int,
+    val arousal: Int,
+    val tension: Int,
+    val scores: Map<String, Int> = emptyMap()
+)
+
 /**
  * Всё, что известно о песне: жанр, настроения (можно несколько), энергичность, темп, описание,
  * уверенность в оценке, лайк и откуда данные. artist/title/album хранятся рядом, чтобы таблица
@@ -28,7 +38,8 @@ data class TrackTags(
     val artist: String = "",
     val title: String = "",
     val album: String = "",
-    val moodScores: Map<String, Int> = emptyMap()
+    val moodScores: Map<String, Int> = emptyMap(),
+    val segments: List<MoodSegment> = emptyList()
 ) {
     companion object {
         const val SOURCE_AI = "ai"
@@ -231,6 +242,7 @@ object MusicTags {
         .put("s", v.source).put("l", v.liked).put("ed", v.edited).put("w", v.webTried).put("at", v.aiTried).put("n", v.note)
         .put("ar", v.artist).put("ti", v.title).put("al", v.album)
         .put("mp", JSONObject().apply { for ((key, score) in v.moodScores) put(key, score) })
+        .put("sg", JSONArray().apply { for (segment in v.segments) put(JSONObject().put("s", segment.startSeconds).put("e", segment.endSeconds).put("m", segment.mood).put("v", segment.valence).put("a", segment.arousal).put("t", segment.tension).put("sc", JSONObject().apply { for ((key, score) in segment.scores) put(key, score) })) })
 
     private fun fromJson(o: JSONObject): TrackTags {
         val mood = o.optString("m", "calm")
@@ -247,7 +259,19 @@ object MusicTags {
                 val values = LinkedHashMap<String, Int>()
                 for (key in scores.keys()) if (key in this.moods) values[key] = scores.optInt(key).coerceIn(0, 100)
                 values
-            } ?: emptyMap()
+            } ?: emptyMap(),
+            segments = o.optJSONArray("sg")?.let { array ->
+                (0 until array.length()).mapNotNull { index ->
+                    val item = array.optJSONObject(index) ?: return@mapNotNull null
+                    val segmentScores = item.optJSONObject("sc")?.let { values ->
+                        val map = LinkedHashMap<String, Int>()
+                        for (key in values.keys()) if (key in this.moods) map[key] = values.optInt(key).coerceIn(0, 100)
+                        map
+                    } ?: emptyMap()
+                    val moodKey = item.optString("m", "calm").takeIf { it in this.moods } ?: "calm"
+                    MoodSegment(item.optInt("s").coerceAtLeast(0), item.optInt("e").coerceAtLeast(0), moodKey, item.optInt("v").coerceIn(0, 100), item.optInt("a").coerceIn(0, 100), item.optInt("t").coerceIn(0, 100), segmentScores)
+                }
+            } ?: emptyList()
         )
     }
 
