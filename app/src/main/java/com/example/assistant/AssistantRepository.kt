@@ -24,7 +24,7 @@ class AssistantRepository(private val context: Context, apiKey: String) {
         /** Действие, которое ждёт ответа «да» или «нет»; живёт 5 минут. */
         @Volatile var pendingState: Pending? = null
 
-        /** Ждёт ли ассистент ответа «да/нет» (для голосового режима: слушать без слова активации). */
+        /** Ждёт ли ассистент текстового подтверждения действия «да/нет». */
         fun hasPendingConfirmation(): Boolean =
             pendingState?.let { System.currentTimeMillis() - it.at < CONFIRM_TTL_MS } ?: false
         const val CONFIRM_TTL_MS = 5 * 60_000L
@@ -38,11 +38,6 @@ class AssistantRepository(private val context: Context, apiKey: String) {
 
     private val client = GroqClient(apiKey, context.applicationContext)
     private val summaryBatch = 12
-    /**
-     * В кэш выученных фраз попадают только действия, которые не зависят от контекста разговора
-     * и от текущего состояния. Заметки, плейлисты и поиск файлов зависят от них, поэтому их
-     * всегда обрабатывает модель, которая видит историю чата.
-     */
     /** Сколько последних сообщений уходит в модель: для команд хватает немногих, для беседы нужно больше. */
     private val commandHistory = 8
     private val chatHistory = 24
@@ -97,7 +92,7 @@ class AssistantRepository(private val context: Context, apiKey: String) {
                     .getInt("retry_wait_seconds", 20).coerceIn(0, 30) * 1000L
                 if (wait == null || maxWait == 0L || wait > maxWait) throw e
                 kotlinx.coroutines.delay(wait + 500)
-                askModel(prompt, normalized)
+                askModel(prompt)
             }
             answer.also { summarizeInBackground() }
         } catch (e: Exception) {
@@ -154,7 +149,7 @@ class AssistantRepository(private val context: Context, apiKey: String) {
     /** «Мой город — Астана», «меня зовут Анна»: запоминаем на телефоне, чтобы ассистент знал пользователя. */
     private suspend fun setProfile(field: String, value: String): String {
         val v = value.trim().trimEnd('.', '!')
-        if (v.isEmpty()) return "Не расслышал, что запомнить."
+        if (v.isEmpty()) return "Не указано, что запомнить."
         return when (field.trim().lowercase()) {
             "name", "имя" -> { UserProfile.setName(context, v); "Хорошо, буду звать тебя $v." }
             "city", "город" -> {
