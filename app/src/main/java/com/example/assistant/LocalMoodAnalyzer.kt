@@ -21,7 +21,7 @@ object LocalMoodAnalyzer {
         val wholeTrack = classify(extractFeatures(pcm, targetRate))
         val segments = analyzeSegments(pcm, targetRate)
         if (segments.isEmpty()) return wholeTrack
-        val aggregate = aggregateSegmentScores(pcm, targetRate, wholeTrack, segments)
+        val aggregate = aggregateSegmentScores(targetRate, wholeTrack, segments)
         val changes = segments.map { it.mood }.distinct()
         val trend = if (changes.size > 1) " · смена настроения: " + changes.joinToString(" → ") { MusicTags.moods[it]?.lowercase() ?: it } else ""
         return aggregate.copy(description = wholeTrack.description + " · фрагментов: " + segments.size + trend, segments = segments)
@@ -38,7 +38,7 @@ object LocalMoodAnalyzer {
             val end = min(pcm.size, start + window)
             if (end - start >= minimum) {
                 val local = classify(extractFeatures(pcm.copyOfRange(start, end), sampleRate))
-                result += MoodSegment(start / sampleRate, end / sampleRate, local.scores.maxByOrNull { it.value }?.key ?: "calm", local.valence, local.arousal, local.tension)
+                result += MoodSegment(start / sampleRate, end / sampleRate, local.scores.maxByOrNull { it.value }?.key ?: "calm", local.valence, local.arousal, local.tension, local.scores)
             }
             if (end == pcm.size) break
             start += hop
@@ -46,35 +46,26 @@ object LocalMoodAnalyzer {
         return result
     }
 
-    private fun aggregateSegmentScores(whole: MoodAnalysis, segments: List<MoodSegment>): MoodAnalysis {
+    private fun aggregateSegmentScores(sampleRate: Int, whole: MoodAnalysis, segments: List<MoodSegment>): MoodAnalysis {
         val keys = whole.scores.keys.toList()
         val weighted = DoubleArray(keys.size)
         var totalWeight = 0.0
         for (segment in segments) {
-            val from = segment.startSeconds * 11025
-            val to = segment.endSeconds * 11025
-            val weight = (to - from).toDouble().coerceAtLeast(1.0)
-            // Segment scores are calculated from exactly the same window in analyzeSegments.
-            val scoreWeight = weight / (segments.sumOf { (it.endSeconds - it.startSeconds).toDouble() }.coerceAtLeast(1.0))
-            val localMoodWeight = 1.0 / segments.size
-            val moodIndex = keys.indexOf(segment.mood)
-            if (moodIndex >= 0) weighted[moodIndex] += 100.0 * scoreWeight * localMoodWeight
+            val weight = (segment.endSeconds - segment.startSeconds).toDouble().coerceAtLeast(1.0)
+            for (i in keys.indices) weighted[i] += (segment.scores[keys[i]] ?: 0) * weight
             totalWeight += weight
         }
-        // Blend the segment-level dominant-mood signal conservatively with whole-track scores.
-        val blended = keys.mapIndexed { i, key -> key to ((whole.scores[key] ?: 0) * .85 + weighted[i] * .15) }
+        val blended = keys.mapIndexed { i, key -> key to ((whole.scores[key] ?: 0) * .60 + weighted[i] / totalWeight.coerceAtLeast(1.0) * .40) }
         val sum = blended.sumOf { it.second }.coerceAtLeast(1e-9)
         val exact = blended.associate { it.first to it.second / sum * 100.0 }
         val scores = exact.mapValues { floor(it.value).toInt() }.toMutableMap()
         exact.entries.sortedByDescending { it.value - floor(it.value) }.take(100 - scores.values.sum()).forEach { scores[it.key] = scores.getValue(it.key) + 1 }
         val duration = segments.sumOf { (it.endSeconds - it.startSeconds).toDouble() }.coerceAtLeast(1.0)
-        val avg: (MoodSegment) -> Double = { it.arousal.toDouble() }
         val valence = segments.sumOf { it.valence.toDouble() * (it.endSeconds - it.startSeconds) } / duration
-        val arousal = segments.sumOf { avg(it) * (it.endSeconds - it.startSeconds) } / duration
+        val arousal = segments.sumOf { it.arousal.toDouble() * (it.endSeconds - it.startSeconds) } / duration
         val tension = segments.sumOf { it.tension.toDouble() * (it.endSeconds - it.startSeconds) } / duration
         return whole.copy(scores = scores, valence = valence.roundToInt(), arousal = arousal.roundToInt(), tension = tension.roundToInt(), segments = segments)
     }
-
     private fun decode(context: Context, uri: Uri, targetRate: Int): FloatArray {
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
