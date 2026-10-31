@@ -160,14 +160,16 @@ class PlayerActivity : AppCompatActivity() {
     private fun showMore(anchor: android.view.View) {
         val menu = android.widget.PopupMenu(this, anchor)
         menu.menu.add(0, 1, 0, "Характеристики")
-        menu.menu.add(0, 2, 1, "Очередь")
-        menu.menu.add(0, 3, 2, "Ещё такое")
-        menu.menu.add(0, 4, 3, "Таймер сна")
+        menu.menu.add(0, 5, 1, "Карта настроения по фрагментам")
+        menu.menu.add(0, 2, 2, "Очередь")
+        menu.menu.add(0, 3, 3, "Ещё такое")
+        menu.menu.add(0, 4, 4, "Таймер сна")
         menu.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> PlayerState.track?.let {
                     startActivity(Intent(this, TrackEditActivity::class.java).putExtra(TrackEditActivity.EXTRA_TRACK_ID, it.id))
                 }
+                5 -> showMoodTimeline()
                 2 -> showQueue()
                 3 -> playSimilar()
                 4 -> showSleepTimer()
@@ -177,6 +179,45 @@ class PlayerActivity : AppCompatActivity() {
         menu.show()
     }
 
+    private fun showMoodTimeline() {
+        val track = PlayerState.track ?: return
+        val tags = MusicTags.get(this, track)
+        if (tags == null || tags.segments.isEmpty()) {
+            Toast.makeText(this, "Для этой песни пока нет анализа по фрагментам. Запусти разметку музыки заново.", Toast.LENGTH_LONG).show()
+            return
+        }
+        val density = resources.displayMetrics.density
+        fun dp(value: Int) = (value * density).toInt()
+        val content = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.VERTICAL
+            setPadding(dp(20), dp(12), dp(20), dp(12))
+        }
+        val header = TextView(this).apply {
+            text = "Позитивность ${tags.segments.map { it.valence }.average().toInt()}% · возбуждение ${tags.segments.map { it.arousal }.average().toInt()}% · напряжение ${tags.segments.map { it.tension }.average().toInt()}%"
+            textSize = 14f
+            setTextColor(getColor(R.color.music_text))
+        }
+        content.addView(header)
+        tags.segments.forEachIndexed { index, segment ->
+            val start = PlayerState.formatTime(segment.startSeconds * 1000)
+            val end = PlayerState.formatTime(segment.endSeconds * 1000)
+            val mood = MusicTags.moods[segment.mood] ?: segment.mood
+            val line = TextView(this).apply {
+                text = "${index + 1}. $start–$end · $mood\nПозитивность ${segment.valence}% · возбуждение ${segment.arousal}% · напряжение ${segment.tension}%"
+                textSize = 14f
+                setTextColor(getColor(R.color.music_text))
+                setPadding(0, dp(14), 0, dp(14))
+            }
+            content.addView(line)
+            if (index < tags.segments.lastIndex) {
+                val divider = View(this).apply { setBackgroundColor(getColor(R.color.music_text_dim)); alpha = 0.25f }
+                content.addView(divider, android.widget.LinearLayout.LayoutParams(-1, dp(1)))
+            }
+        }
+        val scroll = android.widget.ScrollView(this).apply { addView(content) }
+        AlertDialog.Builder(this).setTitle("Эмоциональная карта: ${track.title}").setView(scroll)
+            .setPositiveButton("Закрыть", null).show()
+    }
     private fun showQueue() {
         val queue = PlayerState.queue
         if (queue.isEmpty()) return
