@@ -46,6 +46,18 @@ class LocalMoodAnalyzerTest {
         assertTrue(segments.all { it.scores.values.sum() == 100 })
         assertTrue(segments.all { it.valence in 0..100 && it.arousal in 0..100 && it.tension in 0..100 })
     }
+    @Test fun spectralOnsetsProduceTempoEstimateForRegularPulses() {
+        val rate = 22050
+        val samples = FloatArray(rate * 8) { i ->
+            val time = i.toDouble() / rate
+            val phase = time % 0.5
+            val pulse = if (phase < 0.075) 0.32 else 0.008
+            (pulse * sin(2.0 * PI * 880.0 * time)).toFloat()
+        }
+        val features = LocalMoodAnalyzer.extractFeatures(samples, rate)
+        assertTrue("Regular spectral attacks should produce a BPM estimate", features.bpm > 0)
+    }
+
     @Test fun detectsTrackLevelDynamicsAcrossLongerAudio() {
         val rate = 22050
         val samples = FloatArray(rate * 8) { i ->
