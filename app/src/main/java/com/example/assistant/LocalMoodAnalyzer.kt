@@ -9,17 +9,26 @@ import android.net.Uri
 import java.nio.ByteOrder
 import kotlin.math.*
 
-data class MoodAnalysis(val scores: Map<String, Int>, val energy: Int, val bpm: Int, val confidence: Int, val description: String)
-data class AudioFeatures(val rms: Double, val centroid: Double, val low: Double, val high: Double, val flatness: Double, val flux: Double, val beat: Double, val bpm: Int, val dynamics: Double, val count: Int)
+data class MoodAnalysis(val scores: Map<String, Int>, val energy: Int, val bpm: Int, val confidence: Int, val description: String, val valence: Int = 50, val arousal: Int = 50, val tension: Int = 50, val danceability: Int = 0)
+data class AudioFeatures(val rms: Double, val centroid: Double, val low: Double, val high: Double, val flatness: Double, val flux: Double, val beat: Double, val bpm: Int, val dynamics: Double, val count: Int, val durationSeconds: Double = 0.0, val variation: Double = 0.0)
 
 /** Локальный анализ PCM: сеть, Groq и внешние модели не используются. */
 object LocalMoodAnalyzer {
-    fun analyze(context: Context, uri: Uri): MoodAnalysis = classify(extractFeatures(decode(context, uri), 22050))
+    fun analyze(context: Context, uri: Uri): MoodAnalysis {
+        val targetRate = 11025
+        val pcm = decode(context, uri, targetRate)
+        require(pcm.size >= targetRate * 3) { "Недостаточно аудио для анализа (нужно не менее 3 секунд)" }
+        return classify(extractFeatures(pcm, targetRate))
+    }
 
-    private fun decode(context: Context, uri: Uri): FloatArray {
+    private fun decode(context: Context, uri: Uri, targetRate: Int): FloatArray {
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
-        val out = ArrayList<Float>(300_000)
+        // Ограничиваем память: до четырёх минут моно PCM 11,025 кГц.
+        val out = FloatArray(targetRate * 240)
+        var outCount = 0
+        var sourceFrames = 0L
+        var nextSampleFrame = 0.0
         try {
             extractor.setDataSource(context, uri, null)
             var format: MediaFormat? = null
@@ -36,13 +45,12 @@ object LocalMoodAnalyzer {
             var inputDone = false; var outputDone = false
             var channels = input.getInteger(MediaFormat.KEY_CHANNEL_COUNT).coerceIn(1, 8)
             var rate = input.getInteger(MediaFormat.KEY_SAMPLE_RATE)
-            var sourceFrames = 0L
-            while (!outputDone && out.size < 1_500_000) {
+            while (!outputDone && outCount < out.size) {
                 if (!inputDone) {
                     val ix = codec.dequeueInputBuffer(10_000)
                     if (ix >= 0) {
                         val b = codec.getInputBuffer(ix)!!; b.clear()
-                        if (extractor.sampleTime < 0 || extractor.sampleTime > 38_000_000L) {
+                        if (extractor.sampleTime < 0) {
                             codec.queueInputBuffer(ix,0,0,0,MediaCodec.BUFFER_FLAG_END_OF_STREAM); inputDone=true
                         } else {
                             val size=extractor.readSampleData(b,0)
@@ -63,13 +71,18 @@ object LocalMoodAnalyzer {
                             val v=b.slice().order(ByteOrder.nativeOrder())
                             val bytes=if(isFloat)4 else 2
                             val frames=info.size/bytes/channels
-                            val stride=max(1,rate/22050)
                             for(frame in 0 until frames){
-                                var s=0.0
-                                repeat(channels){s+=if(isFloat)v.getFloat().toDouble() else v.getShort().toDouble()/32768.0}
-                                if(frame%stride==0)out.add((s/channels).toFloat().coerceIn(-1f,1f))
-                                if(out.size>=1_500_000)break
+                                var sample=0.0
+                                repeat(channels){sample+=if(isFloat)v.getFloat().toDouble() else v.getShort().toDouble()/32768.0}
+                                val mono=(sample/channels).toFloat().coerceIn(-1f,1f)
+                                val absoluteFrame=sourceFrames+frame
+                                if(absoluteFrame+1e-9>=nextSampleFrame && outCount<out.size){
+                                    out[outCount++]=mono
+                                    nextSampleFrame += rate.toDouble()/targetRate
+                                }
+                                if(outCount>=out.size)break
                             }
+                            sourceFrames += frames
                         }
                         outputDone=info.flags and MediaCodec.BUFFER_FLAG_END_OF_STREAM!=0
                         codec.releaseOutputBuffer(ix,false)
@@ -81,7 +94,7 @@ object LocalMoodAnalyzer {
             try{codec?.release()}catch(_:Exception){}
             extractor.release()
         }
-        return out.toFloatArray()
+        return out.copyOf(outCount)
     }
 
     fun extractFeatures(x: FloatArray, sampleRate: Int): AudioFeatures {
@@ -110,7 +123,9 @@ object LocalMoodAnalyzer {
         val sorted=env.sorted();val median=if(sorted.isEmpty())0.0 else sorted[sorted.size/2]
         val dynamics=if(median>1e-8)((env.maxOrNull()?:median)/median).coerceAtMost(12.0)else 1.0
         val beat=detectBeat(env,sampleRate.toDouble()/hop)
-        return AudioFeatures(sqrt(sumSq/max(1,x.size)),centers.average().finiteOrZero(),lows.average().finiteOrZero(),highs.average().finiteOrZero(),flats.average().finiteOrZero(),fluxes.average().finiteOrZero(),beat.first,beat.second,dynamics,x.size)
+        val meanEnv=env.average().coerceAtLeast(1e-9)
+        val variation=if(env.isNotEmpty())sqrt(env.map{(it-meanEnv)*(it-meanEnv)}.average())/meanEnv else 0.0
+        return AudioFeatures(sqrt(sumSq/max(1,x.size)),centers.average().finiteOrZero(),lows.average().finiteOrZero(),highs.average().finiteOrZero(),flats.average().finiteOrZero(),fluxes.average().finiteOrZero(),beat.first,beat.second,dynamics,x.size,x.size.toDouble()/sampleRate,variation.finiteOrZero())
     }
     private fun Double.finiteOrZero()=if(isFinite())this else 0.0
 
@@ -130,6 +145,11 @@ object LocalMoodAnalyzer {
         val energy=.42*u((f.rms-.012)/.20)+.28*u((f.bpm-60.0)/120)+.18*u(f.flux*4)+.12*u(f.centroid/6500)
         val bright=u(f.centroid/6500);val rhythm=u((f.beat-.07)/.55);val smooth=1-u(f.flatness*2.2);val stable=1-u(f.dynamics/8)
         val dance=if(f.bpm in 100..140)1.0 else 1-min(1.0,abs(f.bpm-120)/75.0)
+        // Двухосевая модель: валентность и возбуждение дополняют, но не подменяют теги настроения.
+        val valence=u(.38*bright+.28*smooth+.20*energy+.14*(1-u(f.low*1.8)))
+        val arousal=u(.55*energy+.25*rhythm+.20*u(f.variation/2.5))
+        val tension=u(.35*f.flatness+.25*u(f.flux*3)+.22*u(f.dynamics/8)+.18*(1-smooth))
+        val danceability=u(.48*dance+.32*rhythm+.20*energy)
         val raw=linkedMapOf(
             "energetic" to (.12+.45*energy+.22*rhythm+.21*u(f.flux*3)),
             "calm" to (.12+.42*(1-energy)+.24*stable+.22*(1-bright)),
@@ -144,9 +164,13 @@ object LocalMoodAnalyzer {
         val top=raw.values.maxOrNull()?:1.0;val ex=raw.mapValues{kotlin.math.exp((it.value-top)/.24)};val total=ex.values.sum()
         val exact=ex.mapValues{it.value/total*100};val scores=exact.mapValues{floor(it.value).toInt()}.toMutableMap()
         exact.entries.sortedByDescending{it.value-floor(it.value)}.take(100-scores.values.sum()).forEach{scores[it.key]=scores.getValue(it.key)+1}
-        val confidence=(42+min(30.0,f.count/22050.0)+min(12.0,f.beat*20)+min(8.0,(1-f.flatness)*8)).roundToInt().coerceIn(40,88)
+        // Это оценка пригодности сигнала, не вероятность правильного распознавания.
+        val durationQuality=u(f.durationSeconds/90.0)
+        val featureQuality=1-u(f.flatness*.65+if(f.rms<.003) .45 else 0.0)
+        val confidence=(25+35*durationQuality+20*u(f.beat*1.8)+20*featureQuality).roundToInt().coerceIn(20,95)
         val level=(1+(energy*4).roundToInt()).coerceIn(1,5)
-        val desc=(if(f.bpm>0)f.bpm.toString()+" BPM · " else "")+"энергия "+(energy*100).roundToInt()+"% · ритм "+(rhythm*100).roundToInt()+"% · яркость "+(bright*100).roundToInt()+"%"
-        return MoodAnalysis(scores,level,f.bpm,confidence,desc)
+        val desc=(if(f.bpm>0)f.bpm.toString()+" BPM · " else "")+
+            "позитивность "+(valence*100).roundToInt()+"% · возбуждение "+(arousal*100).roundToInt()+"% · напряжение "+(tension*100).roundToInt()+"% · танцевальность "+(danceability*100).roundToInt()+"%"
+        return MoodAnalysis(scores,level,f.bpm,confidence,desc,(valence*100).roundToInt(),(arousal*100).roundToInt(),(tension*100).roundToInt(),(danceability*100).roundToInt())
     }
 }
