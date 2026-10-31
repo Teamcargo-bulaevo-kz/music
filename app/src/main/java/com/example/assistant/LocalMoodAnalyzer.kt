@@ -167,16 +167,21 @@ object LocalMoodAnalyzer {
         }
         val sorted=env.sorted();val median=if(sorted.isEmpty())0.0 else sorted[sorted.size/2]
         val dynamics=if(median>1e-8)((env.maxOrNull()?:median)/median).coerceAtMost(12.0)else 1.0
-        val beat=detectBeat(env,sampleRate.toDouble()/hop)
+        // Спектральный flux реагирует на атаки и удары точнее, чем общая громкость RMS.
+        val beat=detectBeat(fluxes,sampleRate.toDouble()/hop)
         val meanEnv=env.average().coerceAtLeast(1e-9)
         val variation=if(env.isNotEmpty())sqrt(env.map{(it-meanEnv)*(it-meanEnv)}.average())/meanEnv else 0.0
         return AudioFeatures(sqrt(sumSq/max(1,x.size)),centers.average().finiteOrZero(),lows.average().finiteOrZero(),highs.average().finiteOrZero(),flats.average().finiteOrZero(),fluxes.average().finiteOrZero(),beat.first,beat.second,dynamics,x.size,x.size.toDouble()/sampleRate,variation.finiteOrZero())
     }
     private fun Double.finiteOrZero()=if(isFinite())this else 0.0
 
-    private fun detectBeat(env:List<Double>,fps:Double):Pair<Double,Int>{
-        if(env.size<80)return 0.0 to 0
-        val mean=env.average();val x=env.map{it-mean};var best=0.0;var bpm=0
+    private fun detectBeat(onsets:List<Double>,fps:Double):Pair<Double,Int>{
+        if(onsets.size<80)return 0.0 to 0
+        // Нормируем onset envelope: отдельные громкие удары не должны доминировать над всей записью.
+        val mean=onsets.average(); val variance=onsets.map{(it-mean)*(it-mean)}.average()
+        if (variance < 1e-12) return 0.0 to 0
+        val scale=sqrt(variance); val x=onsets.map{((it-mean)/scale).coerceIn(-4.0,4.0)}
+        var best=0.0;var bpm=0
         for(candidate in 60..180){val lag=(fps*60/candidate).roundToInt();var cross=0.0;var a=0.0;var b=0.0
             for(i in lag until x.size){cross+=x[i]*x[i-lag];a+=x[i]*x[i];b+=x[i-lag]*x[i-lag]}
             val corr=if(a>0&&b>0)cross/sqrt(a*b)else 0.0
