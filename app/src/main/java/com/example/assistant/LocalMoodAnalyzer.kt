@@ -9,7 +9,7 @@ import android.net.Uri
 import java.nio.ByteOrder
 import kotlin.math.*
 
-data class MoodAnalysis(val scores: Map<String, Int>, val energy: Int, val bpm: Int, val confidence: Int, val description: String, val valence: Int = 50, val arousal: Int = 50, val tension: Int = 50, val danceability: Int = 0)
+data class MoodAnalysis(val scores: Map<String, Int>, val energy: Int, val bpm: Int, val confidence: Int, val description: String, val valence: Int = 50, val arousal: Int = 50, val tension: Int = 50, val danceability: Int = 0, val segments: List<MoodSegment> = emptyList())
 data class AudioFeatures(val rms: Double, val centroid: Double, val low: Double, val high: Double, val flatness: Double, val flux: Double, val beat: Double, val bpm: Int, val dynamics: Double, val count: Int, val durationSeconds: Double = 0.0, val variation: Double = 0.0)
 
 /** Локальный анализ PCM: сеть, Groq и внешние модели не используются. */
@@ -18,7 +18,61 @@ object LocalMoodAnalyzer {
         val targetRate = 11025
         val pcm = decode(context, uri, targetRate)
         require(pcm.size >= targetRate * 3) { "Недостаточно аудио для анализа (нужно не менее 3 секунд)" }
-        return classify(extractFeatures(pcm, targetRate))
+        val wholeTrack = classify(extractFeatures(pcm, targetRate))
+        val segments = analyzeSegments(pcm, targetRate)
+        if (segments.isEmpty()) return wholeTrack
+        val aggregate = aggregateSegmentScores(pcm, targetRate, wholeTrack, segments)
+        val changes = segments.map { it.mood }.distinct()
+        val trend = if (changes.size > 1) " · смена настроения: " + changes.joinToString(" → ") { MusicTags.moods[it]?.lowercase() ?: it } else ""
+        return aggregate.copy(description = wholeTrack.description + " · фрагментов: " + segments.size + trend, segments = segments)
+    }
+
+    private fun analyzeSegments(pcm: FloatArray, sampleRate: Int): List<MoodSegment> {
+        val window = sampleRate * 20
+        val hop = sampleRate * 10
+        val minimum = sampleRate * 8
+        if (pcm.size < minimum) return emptyList()
+        val result = ArrayList<MoodSegment>()
+        var start = 0
+        while (start < pcm.size) {
+            val end = min(pcm.size, start + window)
+            if (end - start >= minimum) {
+                val local = classify(extractFeatures(pcm.copyOfRange(start, end), sampleRate))
+                result += MoodSegment(start / sampleRate, end / sampleRate, local.scores.maxByOrNull { it.value }?.key ?: "calm", local.valence, local.arousal, local.tension)
+            }
+            if (end == pcm.size) break
+            start += hop
+        }
+        return result
+    }
+
+    private fun aggregateSegmentScores(whole: MoodAnalysis, segments: List<MoodSegment>): MoodAnalysis {
+        val keys = whole.scores.keys.toList()
+        val weighted = DoubleArray(keys.size)
+        var totalWeight = 0.0
+        for (segment in segments) {
+            val from = segment.startSeconds * 11025
+            val to = segment.endSeconds * 11025
+            val weight = (to - from).toDouble().coerceAtLeast(1.0)
+            // Segment scores are calculated from exactly the same window in analyzeSegments.
+            val scoreWeight = weight / (segments.sumOf { (it.endSeconds - it.startSeconds).toDouble() }.coerceAtLeast(1.0))
+            val localMoodWeight = 1.0 / segments.size
+            val moodIndex = keys.indexOf(segment.mood)
+            if (moodIndex >= 0) weighted[moodIndex] += 100.0 * scoreWeight * localMoodWeight
+            totalWeight += weight
+        }
+        // Blend the segment-level dominant-mood signal conservatively with whole-track scores.
+        val blended = keys.mapIndexed { i, key -> key to ((whole.scores[key] ?: 0) * .85 + weighted[i] * .15) }
+        val sum = blended.sumOf { it.second }.coerceAtLeast(1e-9)
+        val exact = blended.associate { it.first to it.second / sum * 100.0 }
+        val scores = exact.mapValues { floor(it.value).toInt() }.toMutableMap()
+        exact.entries.sortedByDescending { it.value - floor(it.value) }.take(100 - scores.values.sum()).forEach { scores[it.key] = scores.getValue(it.key) + 1 }
+        val duration = segments.sumOf { (it.endSeconds - it.startSeconds).toDouble() }.coerceAtLeast(1.0)
+        val avg: (MoodSegment) -> Double = { it.arousal.toDouble() }
+        val valence = segments.sumOf { it.valence.toDouble() * (it.endSeconds - it.startSeconds) } / duration
+        val arousal = segments.sumOf { avg(it) * (it.endSeconds - it.startSeconds) } / duration
+        val tension = segments.sumOf { it.tension.toDouble() * (it.endSeconds - it.startSeconds) } / duration
+        return whole.copy(scores = scores, valence = valence.roundToInt(), arousal = arousal.roundToInt(), tension = tension.roundToInt(), segments = segments)
     }
 
     private fun decode(context: Context, uri: Uri, targetRate: Int): FloatArray {
