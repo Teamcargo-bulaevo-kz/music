@@ -56,12 +56,14 @@ object MusicCatalog {
         TrackTags.SOURCE_USER -> "Вручную"
         TrackTags.SOURCE_WEB -> "Интернет"
         TrackTags.SOURCE_IMPORT -> "Импорт"
+        TrackTags.SOURCE_LOCAL -> "Локальный анализ"
         else -> "ИИ"
     }
 
     private fun sourceFromLabel(text: String): String = when (text.trim().lowercase()) {
         "вручную", "вы", "user" -> TrackTags.SOURCE_USER
         "интернет", "web" -> TrackTags.SOURCE_WEB
+        "локальный анализ", "локально", "local" -> TrackTags.SOURCE_LOCAL
         "ии", "ai" -> TrackTags.SOURCE_AI
         else -> TrackTags.SOURCE_IMPORT
     }
