@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.media.audiofx.Visualizer
 import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -28,6 +29,8 @@ class PlayerActivity : AppCompatActivity() {
     private val handler = Handler(Looper.getMainLooper())
     private var userSeeking = false
     private var shownTrackId = -1L
+    private var visualizer: Visualizer? = null
+    private lateinit var spectrum: SpectrumGlowView
 
     private lateinit var cover: ImageView
     private lateinit var title: TextView
@@ -52,6 +55,7 @@ class PlayerActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_player)
+        spectrum = findViewById(R.id.spectrum)
         cover = findViewById(R.id.cover)
         title = findViewById(R.id.title)
         artist = findViewById(R.id.artist)
@@ -99,12 +103,46 @@ class PlayerActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         shownTrackId = -1L // характеристики могли поменять в редакторе
+        attachVisualizer()
         handler.post(ticker)
     }
 
     override fun onPause() {
         handler.removeCallbacks(ticker)
+        detachVisualizer()
         super.onPause()
+    }
+
+    private fun attachVisualizer() {
+        detachVisualizer()
+        val sessionId = MusicService.instance?.audioSessionId ?: 0
+        if (sessionId <= 0) return
+        try {
+            val minSize = Visualizer.getCaptureSizeRange()[0]
+            val maxSize = Visualizer.getCaptureSizeRange()[1]
+            val size = minOf(1024, maxSize).coerceAtLeast(minSize)
+            visualizer = Visualizer(sessionId).apply {
+                captureSize = size
+                setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
+                    override fun onWaveFormDataCapture(v: Visualizer, data: ByteArray, rate: Int) = Unit
+                    override fun onFftDataCapture(v: Visualizer, data: ByteArray, rate: Int) {
+                        spectrum.setFftData(data)
+                    }
+                }, (Visualizer.getMaxCaptureRate() / 2).coerceAtLeast(8000), false, true)
+                enabled = true
+            }
+        } catch (_: Exception) {
+            // На отдельных прошивках захват аудиосессии запрещён: плеер продолжает работать без визуализатора.
+            spectrum.setFftData(null)
+            visualizer?.release()
+            visualizer = null
+        }
+    }
+
+    private fun detachVisualizer() {
+        try { visualizer?.enabled = false } catch (_: Exception) {}
+        try { visualizer?.release() } catch (_: Exception) {}
+        visualizer = null
     }
 
     private fun refresh() {
