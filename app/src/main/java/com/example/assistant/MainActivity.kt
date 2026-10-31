@@ -136,7 +136,6 @@ class MainActivity : AppCompatActivity() {
             sendPrompt(prompt)
         }
 
-        }
     }
 
     override fun onResume() {
