@@ -226,6 +226,19 @@ object MusicTagger {
         }
     }
 
+    /** Разбор серверного Retry-After: используется также общими сетевыми ошибками ассистента. */
+    fun retryDelayMs(message: String): Long? {
+        val m = Regex("try again in ((?:\\d+h)?(?:\\d+m(?!s))?(?:\\d+(?:\\.\\d+)?s)?(?:\\d+(?:\\.\\d+)?ms)?)").find(message) ?: return null
+        val value = m.groupValues[1]
+        if (value.isEmpty()) return null
+        var ms = 0.0
+        Regex("(\\d+)h").find(value)?.let { ms += it.groupValues[1].toDouble() * 3_600_000 }
+        Regex("(\\d+)m(?!s)").find(value)?.let { ms += it.groupValues[1].toDouble() * 60_000 }
+        Regex("(\\d+(?:\\.\\d+)?)s").find(value)?.let { ms += it.groupValues[1].toDouble() * 1_000 }
+        Regex("(\\d+(?:\\.\\d+)?)ms").find(value)?.let { ms += it.groupValues[1].toDouble() }
+        return if (ms > 0) ms.toLong() else null
+    }
+
     // ---------------------------------------------------------------- уведомления
 
     private fun manager(context: Context): NotificationManager {
