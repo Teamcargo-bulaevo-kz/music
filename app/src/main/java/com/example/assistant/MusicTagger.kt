@@ -162,7 +162,7 @@ object MusicTagger {
         try { MusicCatalog.exportNow(context) } catch (_: Exception) {}
     }
 
-    /** Офлайн-разметка: декодируем до 38 секунд аудио и считаем распределение настроений. */
+    /** Офлайн-разметка: декодируем до четырёх минут аудио с пониженной частотой дискретизации и считаем распределение настроений. */
     private suspend fun phaseLocal(context: Context, music: List<MusicTrack>) {
         val todo = music.distinctBy { MusicTags.trackKey(it) }.filter {
             val tags = MusicTags.get(context, it)
