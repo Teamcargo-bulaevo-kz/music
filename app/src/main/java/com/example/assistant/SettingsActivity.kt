@@ -165,10 +165,6 @@ class SettingsActivity : AppCompatActivity() {
             prefs.edit().putInt("retry_wait_seconds", it).apply()
         }
 
-        addSeek("Пауза после ответа ассистента", AppSettings.int(this, AppSettings.AFTER_ANSWER_MS), " мс",
-            AppSettings.AFTER_ANSWER_MS.min, AppSettings.AFTER_ANSWER_MS.max) {
-            AppSettings.setInt(this, AppSettings.AFTER_ANSWER_MS, it)
-        }
         addSeek("Ожидание соединения с сервером", AppSettings.int(this, AppSettings.CONNECT_TIMEOUT_S), " сек",
             AppSettings.CONNECT_TIMEOUT_S.min, AppSettings.CONNECT_TIMEOUT_S.max) {
             AppSettings.setInt(this, AppSettings.CONNECT_TIMEOUT_S, it)
