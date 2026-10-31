@@ -36,7 +36,7 @@
     <uses-permission android:name="android.permission.BLUETOOTH" android:maxSdkVersion="30" />
     <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
 
-    <!-- Напоминания в точное время и слово «Джарвис» -->
+    <!-- Напоминания в точное время -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
 
@@ -108,7 +108,7 @@
             android:taskAffinity="com.example.assistant.music"
             android:theme="@style/Theme.Music" />
 
-        <!-- Постоянное уведомление с кнопкой «Говорить» -->
+        <!-- Постоянное уведомление для быстрого доступа к текстовому чату -->
         <service
             android:name=".AssistantService"
             android:exported="false"
