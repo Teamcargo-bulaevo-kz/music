@@ -104,33 +104,6 @@
             android:taskAffinity="com.example.assistant.music"
             android:theme="@style/Theme.Music" />
 
-        <!-- Постоянное уведомление для быстрого доступа к текстовому чату -->
-        <service
-            android:name=".AssistantService"
-            android:exported="false"
-            android:foregroundServiceType="specialUse">
-            <property
-                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="assistant_chat_quick_access" />
-        </service>
-
-        <receiver
-            android:name=".BootReceiver"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.BOOT_COMPLETED" />
-                <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
-            </intent-filter>
-        </receiver>
-
-        <receiver
-            android:name=".ReminderReceiver"
-            android:exported="false" />
-
-        <receiver
-            android:name=".DigestReceiver"
-            android:exported="false" />
-
         <service
             android:name=".MusicTagService"
             android:exported="false"
@@ -140,20 +113,6 @@
             android:name=".MusicService"
             android:exported="false"
             android:foregroundServiceType="mediaPlayback" />
-
-        <!-- Нужна только для скриншотов. Включается вручную в специальных возможностях -->
-        <service
-            android:name=".AssistantAccessibilityService"
-            android:exported="false"
-            android:label="Assistant"
-            android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE">
-            <intent-filter>
-                <action android:name="android.accessibilityservice.AccessibilityService" />
-            </intent-filter>
-            <meta-data
-                android:name="android.accessibilityservice"
-                android:resource="@xml/accessibility_service_config" />
-        </service>
 
         <!-- Чтобы открывать найденные файлы во внешних приложениях -->
         <provider
