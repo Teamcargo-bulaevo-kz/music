@@ -27,7 +27,7 @@ object LocalMoodAnalyzer {
         return aggregate.copy(description = wholeTrack.description + " · фрагментов: " + segments.size + trend, segments = segments)
     }
 
-    private fun analyzeSegments(pcm: FloatArray, sampleRate: Int): List<MoodSegment> {
+    internal fun analyzeSegments(pcm: FloatArray, sampleRate: Int): List<MoodSegment> {
         val window = sampleRate * 20
         val hop = sampleRate * 10
         val minimum = sampleRate * 8
