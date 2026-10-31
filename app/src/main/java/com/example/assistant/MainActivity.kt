@@ -8,7 +8,6 @@ import android.os.Build
 import android.os.Environment
 import android.os.Bundle
 import android.provider.Settings
-import android.speech.RecognizerIntent
 import android.view.View
 import android.widget.ArrayAdapter
 import android.provider.OpenableColumns
@@ -44,7 +43,6 @@ class MainActivity : AppCompatActivity() {
 
     private lateinit var input: EditText
     private lateinit var sendButton: ImageButton
-    private lateinit var micButton: ImageButton
     private lateinit var emptyState: View
     private lateinit var drawer: DrawerLayout
     private lateinit var chatTitle: TextView
@@ -54,49 +52,8 @@ class MainActivity : AppCompatActivity() {
     private var chats: List<ChatInfo> = emptyList()
     private var busy = false
 
-    private val voiceLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        if (result.resultCode == RESULT_OK) {
-            val results = result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)
-            val recognized = results?.firstOrNull()
-            if (!recognized.isNullOrBlank()) {
-                sendPrompt(recognized)
-            }
-        }
-    }
-
-    private val diagnosticVoiceLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
-        val recognized = if (result.resultCode == RESULT_OK) {
-            result.data?.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS)?.firstOrNull()
-        } else null
-        AlertDialog.Builder(this)
-            .setTitle(if (!recognized.isNullOrBlank()) "Тест микрофона: УСПЕХ" else "Тест микрофона: НЕТ РЕЗУЛЬТАТА")
-            .setMessage(
-                if (!recognized.isNullOrBlank()) "Система распознала:\n\n«$recognized»\n\nЭто проверяет микрофон и системное распознавание, но не фоновый движок слова активации."
-                else "Система не вернула распознанный текст. Проверь интернет, системный сервис распознавания речи и разрешение микрофона."
-            )
-            .setPositiveButton("ОК", null)
-            .show()
-    }
-
-    private val wakePermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        findViewById<CompoundButton>(R.id.wakeCheck).isChecked = granted
-        if (granted) {
-            WakeWordService.setEnabled(this, true)
-        } else {
-            Toast.makeText(this, "Без доступа к микрофону слово активации не работает", Toast.LENGTH_SHORT).show()
-        }
-    }
-
     private val attachLauncher = registerForActivityResult(ActivityResultContracts.GetContent()) { uri ->
         if (uri != null) attachFile(uri)
-    }
-
-    private val recordAudioPermissionLauncher = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) {
-            launchVoiceRecognition()
-        } else {
-            Toast.makeText(this, "Нужен доступ к микрофону для голосового ввода", Toast.LENGTH_SHORT).show()
-        }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -119,7 +76,6 @@ class MainActivity : AppCompatActivity() {
         input = findViewById(R.id.inputField)
         sendButton = findViewById(R.id.sendButton)
         emptyState = findViewById(R.id.emptyState)
-        micButton = findViewById(R.id.micButton)
         drawer = findViewById(R.id.drawer)
         chatTitle = findViewById(R.id.chatTitle)
         messageList = findViewById(R.id.messageList)
@@ -133,7 +89,6 @@ class MainActivity : AppCompatActivity() {
             visibility = if (settingsPrefs.getBoolean("attachments_enabled", true)) View.VISIBLE else View.GONE
             setOnClickListener { attachLauncher.launch("*/*") }
         }
-        micButton.visibility = if (settingsPrefs.getBoolean("voice_input_enabled", true)) View.VISIBLE else View.GONE
         findViewById<android.widget.LinearLayout>(R.id.suggestions).visibility =
             if (settingsPrefs.getBoolean("suggestions_enabled", true)) View.VISIBLE else View.GONE
         findViewById<TextView>(R.id.allSettings).setOnClickListener {
@@ -145,65 +100,11 @@ class MainActivity : AppCompatActivity() {
         speakCheck.isChecked = Speaker.enabled(this)
         speakCheck.setOnCheckedChangeListener { _, checked -> Speaker.setEnabled(this, checked) }
 
-        val wakeCheck = findViewById<CompoundButton>(R.id.wakeCheck)
-        wakeCheck.isChecked = WakeWordService.enabled(this) && WakeWordService.hasMicPermission(this)
-        wakeCheck.setOnCheckedChangeListener { button, checked ->
-            if (!button.isPressed) return@setOnCheckedChangeListener
-            if (!checked) {
-                WakeWordService.setEnabled(this, false)
-            } else if (WakeWordService.hasMicPermission(this)) {
-                WakeWordService.setEnabled(this, true)
-            } else {
-                wakePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-            }
-        }
-
-        findViewById<Button>(R.id.testWakeButton).setOnClickListener {
-            Toast.makeText(this, "Кнопка нажата: запускаю тест фонового движка", Toast.LENGTH_LONG).show()
-            AlertDialog.Builder(this)
-                .setTitle("Проверка фонового движка")
-                .setMessage("Сейчас запускается локальное распознавание Sherpa-ONNX. Первая загрузка модели может занять несколько минут. Если системное уведомление не появится, сервис не стартовал.")
-                .setPositiveButton("Запустить") { _, _ ->
-                    if (WakeWordService.hasMicPermission(this)) {
-                        WakeWordService.test(this)
-                    } else {
-                        wakePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-                    }
-                }
-                .setNegativeButton("Отмена", null)
-                .show()
-        }
-
-        findViewById<Button>(R.id.testSystemSpeechButton).setOnClickListener {
-            if (!WakeWordService.hasMicPermission(this)) {
-                wakePermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-            } else {
-                val intent = VoiceInput.intent(context = this)
-                // Освобождаем микрофон для системного (Google) распознавания.
-                WakeWordService.pauseForSystemVoiceInput(this)
-                try {
-                    diagnosticVoiceLauncher.launch(intent)
-                } catch (e: Exception) {
-                    WakeWordService.start(this)
-                    AlertDialog.Builder(this)
-                        .setTitle("Не удалось запустить тест")
-                        .setMessage("${e.javaClass.simpleName}: ${e.message ?: "без подробностей"}")
-                        .setPositiveButton("ОК", null)
-                        .show()
-                }
-            }
-        }
-
         findViewById<TextView>(R.id.appVersion).text = "V${BuildConfig.VERSION_NAME} · ${BuildConfig.BUILD_TAG}"
 
-        WakeWordService.applyPhrase(this)
         findViewById<TextView>(R.id.privacySettings).setOnClickListener {
             drawer.closeDrawers()
             showPrivacySettings()
-        }
-        findViewById<TextView>(R.id.wakeSettings).setOnClickListener {
-            drawer.closeDrawers()
-            showWakeSettings()
         }
         findViewById<TextView>(R.id.voiceSettings).setOnClickListener {
             drawer.closeDrawers()
@@ -235,12 +136,6 @@ class MainActivity : AppCompatActivity() {
             sendPrompt(prompt)
         }
 
-        micButton.setOnClickListener {
-            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
-                launchVoiceRecognition()
-            } else {
-                recordAudioPermissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
-            }
         }
     }
 
@@ -250,16 +145,14 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("assistant_prefs", MODE_PRIVATE)
         findViewById<ImageButton>(R.id.attachButton).visibility =
             if (prefs.getBoolean("attachments_enabled", true)) View.VISIBLE else View.GONE
-        micButton.visibility = if (prefs.getBoolean("voice_input_enabled", true)) View.VISIBLE else View.GONE
         findViewById<android.widget.LinearLayout>(R.id.suggestions).visibility =
             if (prefs.getBoolean("suggestions_enabled", true)) View.VISIBLE else View.GONE
     }
 
     override fun onStart() {
         super.onStart()
-        // Чат читаем заново: за время, пока приложение было свёрнуто, могли прийти голосовые команды из шторки
+        // Обновляем открытый чат и синхронизируем медиатеку.
         showCurrentChat()
-        WakeWordService.start(this)
         uiScope.launch(Dispatchers.IO) {
             // Музыка, которую система ещё не знает (скачанное, из мессенджеров), добавляется в медиатеку
             MusicIndexer.scanNewFiles(applicationContext)
@@ -406,36 +299,6 @@ class MainActivity : AppCompatActivity() {
             .show()
     }
 
-    /** Слово активации и быстрый переход к настройке батареи. */
-    private fun showWakeSettings() {
-        val field = EditText(this).apply {
-            setText(WakeWordService.phraseTitle(this@MainActivity))
-            setSingleLine()
-            setPadding(48, 32, 48, 16)
-        }
-        AlertDialog.Builder(this)
-            .setTitle("Слово активации")
-            .setMessage(
-                "Слово, на которое отзывается ассистент (не короче 4 букв). Лучше длинное и необычное: так меньше ложных срабатываний.\n\n" +
-                    "Чтобы слушание не отключалось само, разреши приложению работать без ограничений батареи " +
-                    "(на Xiaomi ещё включи «Автозапуск»)."
-            )
-            .setView(field)
-            .setPositiveButton("Сохранить") { _, _ ->
-                WakeWordService.setPhrase(this, field.text.toString())
-                Toast.makeText(this, "Слово: ${WakeWordService.phraseTitle(this)}", Toast.LENGTH_SHORT).show()
-            }
-            .setNeutralButton("Батарея") { _, _ ->
-                try {
-                    startActivity(Intent(Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS))
-                } catch (e: Exception) {
-                    startActivity(Intent(Settings.ACTION_SETTINGS))
-                }
-            }
-            .setNegativeButton("Закрыть", null)
-            .show()
-    }
-
     /** Окно выбора голоса и скорости озвучки. */
     private fun showVoiceSettings() {
         Speaker.voices(applicationContext) { voices ->
@@ -508,33 +371,7 @@ class MainActivity : AppCompatActivity() {
 
     private fun setControlsEnabled(enabled: Boolean) {
         sendButton.isEnabled = enabled
-        micButton.isEnabled = enabled
         sendButton.alpha = if (enabled) 1f else 0.5f
-        micButton.alpha = if (enabled) 1f else 0.5f
-    }
-
-    private fun launchVoiceRecognition() {
-        // Останавливаем озвучку и освобождаем микрофон для Google Speech Recognizer.
-        Speaker.stop()
-        WakeWordService.pauseForSystemVoiceInput(this)
-        val intent = VoiceInput.intent(context = this)
-        try {
-            micButton.postDelayed({
-                if (!isFinishing) {
-                    try {
-                        voiceLauncher.launch(intent)
-                    } catch (e: Exception) {
-                        WakeWordService.start(this)
-                        Toast.makeText(this, "Не удалось запустить системный голосовой ввод", Toast.LENGTH_SHORT).show()
-                    }
-                } else {
-                    WakeWordService.start(this)
-                }
-            }, VoiceInput.afterSpeechDelayMs(this))
-        } catch (e: Exception) {
-            WakeWordService.start(this)
-            Toast.makeText(this, "На телефоне нет приложения для распознавания речи", Toast.LENGTH_SHORT).show()
-        }
     }
 
     /** Копирует выбранный файл во Входящие общей папки, чтобы с ним можно было работать. */

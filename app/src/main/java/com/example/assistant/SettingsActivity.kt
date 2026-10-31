@@ -1,8 +1,6 @@
 package com.example.assistant
 
-import android.Manifest
 import android.content.Intent
-import android.content.pm.PackageManager
 import android.os.Bundle
 import android.view.Gravity
 import android.view.View
@@ -10,7 +8,6 @@ import android.widget.LinearLayout
 import android.widget.SeekBar
 import android.widget.TextView
 import android.widget.Toast
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.core.content.ContextCompat
@@ -36,17 +33,6 @@ class SettingsActivity : AppCompatActivity() {
         super.onStop()
         if (fontChanged) {
             fontChanged = false
-            recreate()
-        }
-    }
-
-    private val micPermission = registerForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-        if (granted) {
-            WakeWordService.setEnabled(this, true)
-            Toast.makeText(this, "Слово активации включено", Toast.LENGTH_SHORT).show()
-        } else {
-            prefs.edit().putBoolean("wake_word", false).apply()
-            Toast.makeText(this, "Для слова активации нужен доступ к микрофону", Toast.LENGTH_LONG).show()
             recreate()
         }
     }
@@ -94,19 +80,11 @@ class SettingsActivity : AppCompatActivity() {
         setContentView(root)
 
         section("Основные функции", "Включай только то, чем пользуешься")
-        addSwitch("Фоновое слово активации", "Постоянно слушает ключевую фразу; расходует заряд и требует микрофон.", WakeWordService.enabled(this)) { enabled ->
-            if (!enabled) WakeWordService.setEnabled(this, false)
-            else if (WakeWordService.hasMicPermission(this)) WakeWordService.setEnabled(this, true)
-            else micPermission.launch(Manifest.permission.RECORD_AUDIO)
-        }
         addSwitch("Озвучивать ответы", "Текстовые ответы ассистента будут произноситься вслух.", Speaker.enabled(this)) { Speaker.setEnabled(this, it) }
-        addSwitch("Кнопка ассистента в шторке", "Постоянное уведомление с кнопками «Говорить», «Чат» и «Выкл».", prefs.getBoolean("quick_access_enabled", true)) {
+        addSwitch("Быстрый доступ к чату", "Постоянное уведомление с кнопками «Чат» и «Выкл».", prefs.getBoolean("quick_access_enabled", true)) {
             prefs.edit().putBoolean("quick_access_enabled", it).apply()
             if (it) AssistantService.start(this)
             else startService(Intent(this, AssistantService::class.java).setAction(AssistantService.ACTION_STOP))
-        }
-        addSwitch("Голосовой ввод в чате", "Показывать кнопку микрофона рядом с полем ввода.", prefs.getBoolean("voice_input_enabled", true)) {
-            prefs.edit().putBoolean("voice_input_enabled", it).apply()
         }
         addSwitch("Прикрепление файлов", "Показывать кнопку выбора файла в чате.", prefs.getBoolean("attachments_enabled", true)) {
             prefs.edit().putBoolean("attachments_enabled", it).apply()
@@ -180,27 +158,8 @@ class SettingsActivity : AppCompatActivity() {
             }
         }
 
-        section("Звуковые сигналы", "Звуки начала и завершения команды настраиваются независимо")
-        addSwitch("Сигнал начала прослушивания", "Короткий сигнал после обнаружения слова активации.", prefs.getBoolean("start_cue_enabled", true)) {
-            prefs.edit().putBoolean("start_cue_enabled", it).apply()
-        }
-        addSeek("Громкость сигнала начала", prefs.getInt("start_cue_volume", 70), "%", 0, 100) {
-            prefs.edit().putInt("start_cue_volume", it).apply()
-        }
-        addSwitch("Сигнал завершения", "Короткий сигнал после распознавания команды.", prefs.getBoolean("end_cue_enabled", true)) {
-            prefs.edit().putBoolean("end_cue_enabled", it).apply()
-        }
-        addSeek("Громкость сигнала завершения", prefs.getInt("end_cue_volume", 70), "%", 0, 100) {
-            prefs.edit().putInt("end_cue_volume", it).apply()
-        }
-        addSeek("Время на команду после активации", (prefs.getLong("command_window_ms", 10_000L) / 1000L).toInt(), " сек", 3, 30) {
-            prefs.edit().putLong("command_window_ms", it * 1000L).apply()
-        }
         addSeek("Тайм-аут ответа ИИ", prefs.getInt("request_timeout_seconds", 45), " сек", 15, 120) {
             prefs.edit().putInt("request_timeout_seconds", it).apply()
-        }
-        addSeek("Пауза перед запуском голосового ввода", prefs.getInt("voice_input_delay_ms", 350), " мс", 0, 1500) {
-            prefs.edit().putInt("voice_input_delay_ms", it).apply()
         }
         addSeek("Максимальное ожидание повтора после лимита API", prefs.getInt("retry_wait_seconds", 20), " сек", 0, 30) {
             prefs.edit().putInt("retry_wait_seconds", it).apply()
@@ -210,23 +169,9 @@ class SettingsActivity : AppCompatActivity() {
             AppSettings.AFTER_ANSWER_MS.min, AppSettings.AFTER_ANSWER_MS.max) {
             AppSettings.setInt(this, AppSettings.AFTER_ANSWER_MS, it)
         }
-        addSeek("Тишина, после которой голосовой ввод заканчивается", AppSettings.int(this, AppSettings.VOICE_SILENCE_MS), " мс",
-            AppSettings.VOICE_SILENCE_MS.min, AppSettings.VOICE_SILENCE_MS.max) {
-            AppSettings.setInt(this, AppSettings.VOICE_SILENCE_MS, it)
-        }
         addSeek("Ожидание соединения с сервером", AppSettings.int(this, AppSettings.CONNECT_TIMEOUT_S), " сек",
             AppSettings.CONNECT_TIMEOUT_S.min, AppSettings.CONNECT_TIMEOUT_S.max) {
             AppSettings.setInt(this, AppSettings.CONNECT_TIMEOUT_S, it)
-        }
-
-        section("Микрофон", "Чтобы ассистент слышал тихо и шёпотом. Применяется при следующем запуске слушания (выключи и включи «Фоновое слово активации»)")
-        addSwitch("Режим шёпота", "Тихая речь усиливается автоматически, шум и тишина — нет. Возможны ложные срабатывания в шумном месте.",
-            AppSettings.bool(this, AppSettings.WHISPER, true)) {
-            getSharedPreferences(AppSettings.PREFS, MODE_PRIVATE).edit().putBoolean(AppSettings.WHISPER, it).apply()
-        }
-        addSeek("Усиление микрофона (1 = без усиления)", AppSettings.int(this, AppSettings.MIC_GAIN), " ×",
-            AppSettings.MIC_GAIN.min, AppSettings.MIC_GAIN.max) {
-            AppSettings.setInt(this, AppSettings.MIC_GAIN, it)
         }
 
         section("Внешний вид", "Изменения сохраняются на устройстве")
@@ -246,32 +191,9 @@ class SettingsActivity : AppCompatActivity() {
             fontChanged = true
         }
 
-        section("Дополнительно", "Настройки слова активации и голоса")
-        addAction("Слово активации и батарея", "Изменить ключевую фразу и открыть настройки энергосбережения") {
-            showWakePhraseDialog()
-        }
+        section("Дополнительно", "Настройки озвучки")
         addAction("Голос и скорость озвучки", "Выбор установленного голоса и темпа речи") {
             showVoiceSettings()
-        }
-        addSwitch("Записывать всё услышанное (для отладки)", "Только на телефоне. Помогает найти, что именно распознаётся неверно. Выключи, когда не нужно.",
-            ListenLog.allEnabled(this)) { ListenLog.setAllEnabled(this, it) }
-        addAction("Журнал слушания", "Что услышал ассистент и что сделал: слово активации, команды") {
-            val text = ListenLog.recent(this)
-            androidx.appcompat.app.AlertDialog.Builder(this)
-                .setTitle("Журнал слушания")
-                .setMessage(text)
-                .setPositiveButton("Копировать") { _, _ ->
-                    val cm = getSystemService(android.content.Context.CLIPBOARD_SERVICE) as android.content.ClipboardManager
-                    cm.setPrimaryClip(android.content.ClipData.newPlainText("listen_log", text))
-                    Toast.makeText(this, "Скопировано", Toast.LENGTH_SHORT).show()
-                }
-                .setNeutralButton("Очистить") { _, _ -> ListenLog.clear(this) }
-                .setNegativeButton("Закрыть", null)
-                .show()
-        }
-        addAction("Проверить фоновый микрофон", "Запустить диагностическое прослушивание") {
-            if (WakeWordService.hasMicPermission(this)) WakeWordService.test(this)
-            else micPermission.launch(Manifest.permission.RECORD_AUDIO)
         }
         addAction("Консоль (Shizuku)", "Память и процессы по приложениям. Только чтение. Статус: ${ShizukuShell.state(this).text}") {
             showShizuku()
@@ -469,28 +391,6 @@ class SettingsActivity : AppCompatActivity() {
                 dialog.dismiss()
             }
             .setNegativeButton("Закрыть", null)
-            .show()
-    }
-
-    private fun showWakePhraseDialog() {
-        val field = android.widget.EditText(this).apply {
-            setText(WakeWordService.phraseTitle(this@SettingsActivity))
-            setSingleLine()
-            setPadding(dp(12), dp(12), dp(12), dp(12))
-        }
-        androidx.appcompat.app.AlertDialog.Builder(this)
-            .setTitle("Слово активации")
-            .setMessage("Используй фразу не короче четырёх букв. Для устойчивой работы на Xiaomi может потребоваться разрешить автозапуск и работу без ограничений батареи.")
-            .setView(field)
-            .setPositiveButton("Сохранить") { _, _ ->
-                WakeWordService.setPhrase(this, field.text.toString())
-                Toast.makeText(this, "Слово активации сохранено", Toast.LENGTH_SHORT).show()
-            }
-            .setNeutralButton("Настройки батареи") { _, _ ->
-                try { startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
-                catch (_: Exception) { startActivity(Intent(android.provider.Settings.ACTION_SETTINGS)) }
-            }
-            .setNegativeButton("Отмена", null)
             .show()
     }
 

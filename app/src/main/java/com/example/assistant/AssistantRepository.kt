@@ -8,12 +8,11 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import org.json.JSONObject
-import java.util.Locale
 import java.util.concurrent.atomic.AtomicBoolean
 
 /**
  * Связывает модель (GroqClient) с реальными действиями (PhoneActions, MusicActions, NoteActions...).
- * Сначала пробует обойтись без модели (правила и выученные фразы), потом идёт в Groq.
+ * Сначала пробует обойтись без модели (локальные правила), потом идёт в Groq.
  */
 class AssistantRepository(private val context: Context, apiKey: String) {
 
@@ -39,28 +38,18 @@ class AssistantRepository(private val context: Context, apiKey: String) {
 
     private val client = GroqClient(apiKey, context.applicationContext)
     private val summaryBatch = 12
-    private val patternDao = NoteDatabase.getInstance(context).commandPatternDao()
-
-    private fun normalize(text: String): String =
-        text.trim().lowercase(Locale.getDefault())
-
     /**
      * В кэш выученных фраз попадают только действия, которые не зависят от контекста разговора
      * и от текущего состояния. Заметки, плейлисты и поиск файлов зависят от них, поэтому их
      * всегда обрабатывает модель, которая видит историю чата.
      */
-    private val cacheableFunctions = setOf(
-        "set_alarm", "play_music", "music_control", "set_volume", "flashlight", "open_camera",
-        "take_screenshot", "open_app", "open_browser", "open_settings", "open_dialer"
-    )
-
     /** Сколько последних сообщений уходит в модель: для команд хватает немногих, для беседы нужно больше. */
     private val commandHistory = 8
     private val chatHistory = 24
 
     /**
      * Три уровня, чтобы тратить меньше токенов:
-     * 1. Правила (LocalCommands) и выученные фразы: модель не участвует, 0 токенов.
+     * 1. Локальные правила (LocalCommands): модель не участвует, 0 токенов.
      * 2. Команда, которую правила не поняли: короткий запрос к модели (нужные функции, короткая
      *    история), ответ модели выполняется как есть, без второго вызова.
      * 3. Обычная беседа: длинная история и сжатый список функций.
@@ -89,8 +78,6 @@ class AssistantRepository(private val context: Context, apiKey: String) {
     }
 
     private suspend fun handleInner(prompt: String): String {
-        val normalized = normalize(prompt)
-
         // Уровень 1: правила
         LocalCommands.parse(prompt)?.let { command ->
             runLocal(command)?.let { return it }
@@ -100,18 +87,9 @@ class AssistantRepository(private val context: Context, apiKey: String) {
             val known = withContext(Dispatchers.IO) { MusicLibrary.index(context).search(query, 1).isNotEmpty() }
             if (known) return execute("play_music", JSONObject().put("query", query).put("shuffle", false))
         }
-        // Уровень 1: фразы, которым ассистент уже научился у модели
-        val cached = patternDao.find(normalized)?.takeIf { it.functionName in cacheableFunctions }
-        if (cached != null) {
-            val args = try { JSONObject(cached.argumentsJson) } catch (e: Exception) { JSONObject() }
-            val result = execute(cached.functionName, args)
-            patternDao.upsert(cached.copy(useCount = cached.useCount + 1, lastUsed = System.currentTimeMillis()))
-            return result
-        }
-
         return try {
             val answer = try {
-                askModel(prompt, normalized)
+                askModel(prompt)
             } catch (e: GroqApiException) {
                 // Короткий лимит «в минуту»: подождём и повторим один раз сами
                 val wait = if (e.code == 429) MusicTagger.retryDelayMs(e.message.orEmpty()) else null
@@ -203,7 +181,7 @@ class AssistantRepository(private val context: Context, apiKey: String) {
     }
 
     /** Уровни 2 и 3: запрос к модели. */
-    private suspend fun askModel(prompt: String, normalizedPhrase: String): String {
+    private suspend fun askModel(prompt: String): String {
         val history = ChatHistory.load(context)
         val recent = history.takeLast(4).map { it.text }
         val groups = Tools.groupsFor(listOf(prompt) + recent)
@@ -240,17 +218,6 @@ class AssistantRepository(private val context: Context, apiKey: String) {
             is GroqResult.FunctionCalls -> {
                 val outputs = result.calls.map { execute(it.name, it.arguments) }
 
-                // Запоминаем фразу только если это было одно простое действие
-                val only = result.calls.singleOrNull()
-                if (only != null && only.name in cacheableFunctions) {
-                    patternDao.upsert(
-                        CommandPatternEntity(
-                            phrase = normalizedPhrase,
-                            functionName = only.name,
-                            argumentsJson = only.arguments.toString()
-                        )
-                    )
-                }
                 // Содержимое файлов и баз модель должна осмыслить (найти, посчитать, пересказать): второй короткий вызов
                 val needsAnalysis = result.calls.any {
                     it.name == "shared_folder" && it.arguments.optString("action") in setOf("read", "sql")

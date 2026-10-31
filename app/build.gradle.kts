@@ -1,5 +1,3 @@
-import java.net.URL
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
@@ -29,9 +27,6 @@ android {
 
     buildFeatures { buildConfig = true }
 
-    // Модель весит около 130 МБ и почти не сжимается — не тратим время на упаковку
-    androidResources { noCompress += listOf("onnx") }
-
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
@@ -39,29 +34,7 @@ android {
     kotlinOptions { jvmTarget = "17" }
 }
 
-val sherpaAar = layout.projectDirectory.file("libs/sherpa-onnx-1.13.8.aar")
-tasks.register("downloadSherpaAar") {
-    outputs.file(sherpaAar)
-    doLast {
-        val target = sherpaAar.asFile
-        if (!target.exists() || target.length() < 1_000_000L) {
-            target.parentFile.mkdirs()
-            val temp = target.resolveSibling(target.name + ".part")
-            URL("https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar").openStream().use { input ->
-                temp.outputStream().use { output -> input.copyTo(output) }
-            }
-            check(temp.length() > 1_000_000L) { "Sherpa-ONNX AAR download failed or was incomplete" }
-            if (!temp.renameTo(target)) {
-                temp.copyTo(target, overwrite = true)
-                temp.delete()
-            }
-        }
-    }
-}
-tasks.matching { it.name == "preBuild" }.configureEach { dependsOn("downloadSherpaAar") }
-
 dependencies {
-    implementation(files("libs/sherpa-onnx-1.13.8.aar"))
     implementation("androidx.core:core-ktx:1.13.1")
     implementation("androidx.appcompat:appcompat:1.7.0")
     implementation("com.google.android.material:material:1.12.0")

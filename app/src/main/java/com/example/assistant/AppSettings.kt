@@ -18,25 +18,9 @@ object AppSettings {
 
     const val PREFS = "assistant_prefs"
 
-    val CUE_START_VOLUME = IntSpec("start_cue_volume", 70, 0, 100)
-    val CUE_END_VOLUME = IntSpec("end_cue_volume", 70, 0, 100)
-    const val CUE_START_ON = "start_cue_enabled"
-    const val CUE_END_ON = "end_cue_enabled"
-
     val REQUEST_TIMEOUT_S = IntSpec("request_timeout_seconds", 45, 15, 120)
     val CONNECT_TIMEOUT_S = IntSpec("connect_timeout_seconds", 30, 5, 60)
     val RETRY_WAIT_S = IntSpec("retry_wait_seconds", 20, 0, 30)
-    val VOICE_DELAY_MS = IntSpec("voice_input_delay_ms", 350, 0, 1500)
-    /** Пауза после ответа ассистента, прежде чем снова слушать слово активации. */
-    val AFTER_ANSWER_MS = IntSpec("after_answer_ms", 1800, 500, 5000)
-    /** Сколько тишины считать концом фразы при голосовом вводе. */
-    val VOICE_SILENCE_MS = IntSpec("voice_silence_ms", 1800, 800, 3500)
-
-    /** Постоянное усиление микрофона для распознавания (1 = без усиления). */
-    val MIC_GAIN = IntSpec("mic_gain", 1, 1, 12)
-    /** Режим шёпота: тихая речь подтягивается автоматически. */
-    const val WHISPER = "whisper_mode"
-
     val CHAT_TEXT_SP = IntSpec("chat_text_size", 16, 13, 23)
     /** Масштаб текста всего приложения, в процентах. */
     val FONT_SCALE = IntSpec("ui_font_scale", 100, 80, 140)
@@ -99,10 +83,9 @@ object AppSettings {
         val p = prefs(context)
         val editor = p.edit()
         listOf(
-            CUE_START_VOLUME, CUE_END_VOLUME, REQUEST_TIMEOUT_S, CONNECT_TIMEOUT_S, RETRY_WAIT_S,
-            VOICE_DELAY_MS, AFTER_ANSWER_MS, VOICE_SILENCE_MS, CHAT_TEXT_SP, FONT_SCALE, MIC_GAIN
+            REQUEST_TIMEOUT_S, CONNECT_TIMEOUT_S, RETRY_WAIT_S, CHAT_TEXT_SP, FONT_SCALE
         ).forEach { editor.remove(it.key) }
-        editor.remove(WHISPER).remove(CUE_START_ON).remove(CUE_END_ON).remove(THEME).remove("command_window_ms")
+        editor.remove(THEME).remove("command_window_ms")
         p.all.keys.filter { it.startsWith("feature_") }.forEach { editor.remove(it) }
         editor.apply()
         applyTheme(context)

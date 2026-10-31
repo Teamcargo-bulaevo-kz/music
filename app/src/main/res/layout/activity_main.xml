@@ -60,17 +60,6 @@
                 android:src="@drawable/ic_chat_add" />
         </LinearLayout>
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/testSystemSpeechButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
-            android:layout_marginTop="4dp"
-            android:layout_marginEnd="12dp"
-            android:layout_marginBottom="4dp"
-            android:text="ТЕСТ МИКРОФОНА (без слова активации)"
-            app:cornerRadius="10dp" />
-
         <FrameLayout
             android:layout_width="match_parent"
             android:layout_height="0dp"
@@ -109,7 +98,7 @@
                     android:layout_height="wrap_content"
                     android:layout_marginTop="6dp"
                     android:layout_marginBottom="16dp"
-                    android:text="Напиши или скажи. Можно начать с примера:"
+                    android:text="Напиши, чтобы начать. Например:"
                     android:textColor="@color/chat_text_dim"
                     android:textSize="14sp" />
 
@@ -156,7 +145,7 @@
                     android:layout_height="wrap_content"
                     android:layout_weight="1"
                     android:background="@null"
-                    android:hint="Напиши или скажи команду"
+                    android:hint="Напиши сообщение"
                     android:inputType="textCapSentences|textMultiLine"
                     android:maxLines="5"
                     android:paddingTop="10dp"
@@ -165,13 +154,6 @@
                     android:textColorHint="@color/chat_text_dim"
                     android:textSize="16sp" />
 
-                <ImageButton
-                    android:id="@+id/micButton"
-                    android:layout_width="44dp"
-                    android:layout_height="44dp"
-                    android:background="?attr/selectableItemBackgroundBorderless"
-                    android:contentDescription="Голосовой ввод"
-                    android:src="@drawable/ic_chat_mic" />
             </LinearLayout>
 
             <ImageButton
@@ -254,28 +236,6 @@
             android:text="Озвучивать ответы"
             android:textColor="@color/chat_text" />
 
-        <com.google.android.material.switchmaterial.SwitchMaterial
-            android:id="@+id/wakeCheck"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:paddingStart="16dp"
-            android:paddingTop="8dp"
-            android:paddingEnd="16dp"
-            android:paddingBottom="8dp"
-            android:text="Слушать слово активации (тратит заряд)"
-            android:textColor="@color/chat_text" />
-
-        <TextView
-            android:id="@+id/wakeSettings"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:background="?attr/selectableItemBackground"
-            android:gravity="center_vertical"
-            android:padding="16dp"
-            android:text="Слово активации и батарея"
-            android:textColor="@color/chat_text"
-            android:textSize="15sp" />
-
         <TextView
             android:id="@+id/privacySettings"
             android:layout_width="match_parent"
@@ -287,14 +247,5 @@
             android:textColor="@color/chat_text"
             android:textSize="15sp" />
 
-        <com.google.android.material.button.MaterialButton
-            android:id="@+id/testWakeButton"
-            android:layout_width="match_parent"
-            android:layout_height="wrap_content"
-            android:layout_marginStart="12dp"
-            android:layout_marginEnd="12dp"
-            android:layout_marginBottom="12dp"
-            android:text="Проверить фоновый микрофон"
-            app:cornerRadius="12dp" />
     </LinearLayout>
 </androidx.drawerlayout.widget.DrawerLayout>

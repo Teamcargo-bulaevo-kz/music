@@ -14,8 +14,7 @@ import android.os.IBinder
 import androidx.core.content.ContextCompat
 
 /**
- * Фоновая работа: постоянное уведомление в шторке с кнопкой «Говорить».
- * Нажал, сказал команду, ассистент выполнил её, не открывая приложение.
+ * Фоновая работа: постоянное уведомление для быстрого открытия текстового чата.
  */
 class AssistantService : Service() {
 
@@ -24,7 +23,7 @@ class AssistantService : Service() {
 
         private const val CHANNEL_ID = "assistant_quick_access"
         private const val NOTIFICATION_ID = 2001
-        private const val HINT = "Нажми «Говорить» и скажи команду"
+        private const val HINT = "Открой чат, чтобы отправить сообщение"
 
         @Volatile private var running = false
         @Volatile private var lastText = HINT
@@ -52,7 +51,6 @@ class AssistantService : Service() {
             )
 
         private fun build(context: Context): Notification {
-            val voice = activity(context, 1, VoiceActivity::class.java)
             val chat = activity(context, 2, MainActivity::class.java)
             val stop = PendingIntent.getService(
                 context, 3, Intent(context, AssistantService::class.java).setAction(ACTION_STOP),
@@ -62,16 +60,15 @@ class AssistantService : Service() {
                 Notification.Action.Builder(Icon.createWithResource(context, icon), title, intent).build()
 
             return Notification.Builder(context, CHANNEL_ID)
-                .setSmallIcon(android.R.drawable.ic_btn_speak_now)
+                .setSmallIcon(android.R.drawable.ic_dialog_info)
                 .setContentTitle("Ассистент")
                 .setContentText(lastText.substringAfter('\n').lineSequence().first())
                 .setStyle(Notification.BigTextStyle().bigText(lastText))
-                .setContentIntent(voice)
+                .setContentIntent(chat)
                 .setOngoing(true)
                 .setOnlyAlertOnce(true)
                 .setShowWhen(false)
                 .setCategory(Notification.CATEGORY_SERVICE)
-                .addAction(action(android.R.drawable.ic_btn_speak_now, "Говорить", voice))
                 .addAction(action(android.R.drawable.ic_menu_edit, "Чат", chat))
                 .addAction(action(android.R.drawable.ic_menu_close_clear_cancel, "Выкл", stop))
                 .build()

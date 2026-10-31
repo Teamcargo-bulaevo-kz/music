@@ -5,7 +5,6 @@
     <uses-permission android:name="android.permission.INTERNET" />
     <!-- Только чтение: какие приложения чаще используются и сколько места занимают. Пользователь включает вручную в настройках. -->
     <uses-permission android:name="android.permission.PACKAGE_USAGE_STATS" tools:ignore="ProtectedPermissions" />
-    <uses-permission android:name="android.permission.RECORD_AUDIO" />
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
 
     <!-- Доступ к музыке, фото и видео -->
@@ -40,9 +39,8 @@
     <!-- Напоминания в точное время и слово «Джарвис» -->
     <uses-permission android:name="android.permission.USE_EXACT_ALARM" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" android:maxSdkVersion="32" />
-    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MICROPHONE" />
 
-    <!-- Фоновая работа: кнопка голоса в шторке, возвращается после перезагрузки -->
+    <!-- Быстрый доступ к чату в шторке -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
 
@@ -54,9 +52,6 @@
         </intent>
         <intent>
             <action android:name="android.intent.action.TTS_SERVICE" />
-        </intent>
-        <intent>
-            <action android:name="android.speech.RecognitionService" />
         </intent>
         <package android:name="com.whatsapp" />
         <package android:name="com.whatsapp.w4b" />
@@ -113,14 +108,6 @@
             android:taskAffinity="com.example.assistant.music"
             android:theme="@style/Theme.Music" />
 
-        <!-- Прозрачный экран голосовой команды из шторки -->
-        <activity
-            android:name=".VoiceActivity"
-            android:exported="false"
-            android:excludeFromRecents="true"
-            android:taskAffinity=""
-            android:theme="@style/Theme.Assistant.Transparent" />
-
         <!-- Постоянное уведомление с кнопкой «Говорить» -->
         <service
             android:name=".AssistantService"
@@ -128,7 +115,7 @@
             android:foregroundServiceType="specialUse">
             <property
                 android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
-                android:value="voice_assistant_quick_access" />
+                android:value="assistant_chat_quick_access" />
         </service>
 
         <receiver
@@ -139,24 +126,6 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
-
-        <!-- Слово «Джарвис»: включается переключателем в меню чатов -->
-        <service
-            android:name=".WakeWordService"
-            android:exported="false"
-            android:foregroundServiceType="microphone" />
-
-        <!-- Плитка в быстрых настройках -->
-        <service
-            android:name=".AssistantTileService"
-            android:exported="true"
-            android:icon="@drawable/ic_tile_mic"
-            android:label="Ассистент"
-            android:permission="android.permission.BIND_QUICK_SETTINGS_TILE">
-            <intent-filter>
-                <action android:name="android.service.quicksettings.action.QS_TILE" />
-            </intent-filter>
-        </service>
 
         <receiver
             android:name=".ReminderReceiver"
