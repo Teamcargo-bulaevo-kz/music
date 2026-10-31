@@ -64,7 +64,9 @@
     <application
         android:name=".AssistantApp"
         android:allowBackup="true"
-        android:label="Assistant"
+        android:label="Музыка"
+        android:icon="@mipmap/ic_music"
+        android:roundIcon="@mipmap/ic_music"
         android:theme="@style/Theme.Assistant">
 
         <activity
@@ -73,12 +75,7 @@
             android:label="Настройки" />
         <activity
             android:name=".MainActivity"
-            android:exported="true">
-            <intent-filter>
-                <action android:name="android.intent.action.MAIN" />
-                <category android:name="android.intent.category.LAUNCHER" />
-            </intent-filter>
-        </activity>
+            android:exported="false" />
 
         <!-- Второе приложение «Музыка»: свой значок, своя задача в списке недавних -->
         <activity
