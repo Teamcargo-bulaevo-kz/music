@@ -101,7 +101,7 @@
         <activity
             android:name=".PlayerActivity"
             android:exported="false"
-            android:label="Музыка"
+            android:label="Harmonia"
             android:taskAffinity="com.example.assistant.music"
             android:theme="@style/Theme.Music" />
 
