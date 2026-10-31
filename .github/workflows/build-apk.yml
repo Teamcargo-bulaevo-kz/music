@@ -1,0 +1,74 @@
+name: Build APK
+
+on:
+  push:
+    branches: [ main, voice-hotword-background, hotword-universal, device-info, fix-mic, chatgpt/settings-ux, claude/settings-polish, integration ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: '8.7'
+
+      - name: Cache speech model
+        id: modelcache
+        uses: actions/cache@v4
+        with:
+          path: app/src/main/assets/wake-model
+          key: wake-model-t-one-russian-2025-09-08
+
+      - name: Bundle speech model into the app
+        if: steps.modelcache.outputs.cache-hit != 'true'
+        shell: bash
+        run: |
+          set -e
+          mkdir -p app/src/main/assets/wake-model /tmp/wm
+          curl -fL --retry 5 --retry-delay 5 -o /tmp/wm/model.tar.bz2 \
+            https://github.com/k2-fsa/sherpa-onnx/releases/download/asr-models/sherpa-onnx-streaming-t-one-russian-2025-09-08.tar.bz2
+          tar -xjf /tmp/wm/model.tar.bz2 -C /tmp/wm
+          cp /tmp/wm/*/model.onnx /tmp/wm/*/tokens.txt app/src/main/assets/wake-model/
+          ls -l app/src/main/assets/wake-model
+
+      - name: Run unit tests
+        id: tests
+        continue-on-error: true
+        shell: bash
+        run: |
+          gradle testDebugUnitTest --console=plain 2>&1 | tee gradle-test.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Report test problems
+        if: steps.tests.outcome == 'failure'
+        shell: bash
+        run: |
+          msg=$(grep -E "^e: |FAILED|Assertion|expected|Exception|error:|What went wrong" -A2 gradle-test.log | grep -v "^--" | head -80 | cut -c1-400 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g') || true
+          fails=$(grep -h "<failure" app/build/test-results/testDebugUnitTest/*.xml 2>/dev/null | cut -c1-500 | sed 's/%/%25/g' | sed ':a;N;$!ba;s/\n/%0A/g') || true
+          echo "::error title=Unit tests failed::$msg%0A%0A$fails"
+          exit 1
+
+      - name: Build debug APK
+        env:
+          GROQ_API_KEY: ${{ secrets.GROQ_API_KEY }}
+        shell: bash
+        run: |
+          gradle assembleDebug --stacktrace --info 2>&1 | tee gradle-build.log
+          exit ${PIPESTATUS[0]}
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: assistant-debug-apk
+          path: app/build/outputs/apk/debug/app-debug.apk
