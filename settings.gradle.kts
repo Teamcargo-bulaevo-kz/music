@@ -13,4 +13,4 @@ dependencyResolutionManagement {
     }
 }
 rootProject.name = "assistant"
-include(":app")
+include(":app", ":music-intelligence")
