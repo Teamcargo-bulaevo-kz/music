@@ -66,6 +66,24 @@ object MusicTags {
 
     const val REVIEW_BELOW = 55
 
+    /** Общий фильтр для пользовательских музыкальных подборок. BPM=0 означает неизвестный темп. */
+    fun matchesPlaylistFilter(
+        tags: TrackTags,
+        mood: String? = null,
+        minimumEnergy: Int = 1,
+        minimumBpm: Int = 0,
+        maximumBpm: Int = 0
+    ): Boolean {
+        if (minimumEnergy !in 1..5 || minimumBpm !in 0..240 || maximumBpm !in 0..240) return false
+        if (minimumBpm > 0 && maximumBpm > 0 && minimumBpm > maximumBpm) return false
+        val moodMatches = mood.isNullOrBlank() ||
+            mood in tags.moods || (tags.moodScores[mood] ?: 0) >= 10
+        val bpmMatches = tags.bpm == 0 ||
+            (minimumBpm == 0 || tags.bpm >= minimumBpm) &&
+            (maximumBpm == 0 || tags.bpm <= maximumBpm)
+        return moodMatches && tags.energy >= minimumEnergy && bpmMatches
+    }
+
     val moods: Map<String, String> = linkedMapOf(
         "energetic" to "Энергичная",
         "calm" to "Спокойная",
