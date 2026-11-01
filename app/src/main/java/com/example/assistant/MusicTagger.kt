@@ -75,15 +75,17 @@ object MusicTagger {
         if (mode == Mode.NEW && untaggedCount(app, music) == 0 && MusicTags.resetFailed(app) > 0) effective = Mode.RETRY
         if (mode == Mode.RETRY) MusicTags.resetFailed(app)
         val untagged = untaggedCount(app, music)
-        if (untagged == 0) {
-            return "Все ${music.size} треков уже размечены. Чтобы сделать это заново, скажи «разметь музыку заново». " +
-                "Свой файл с разметкой можно подгрузить: меню ⋮ → «Выбрать файл с разметкой»."
+        val serverPending = if (ServerMusicAnalyzer.isConfigured()) serverPendingCount(app, music) else 0
+        if (untagged == 0 && serverPending == 0) {
+            return "Все ${music.size} треков уже размечены и проверены доступными анализаторами. " +
+                "Чтобы выполнить анализ заново, скажи «разметь музыку заново»."
         }
         startRun(app)
-        val what = when (effective) {
-            Mode.REDO -> "Размечаю заново (твои правки и оценки сохранены)"
-            Mode.RETRY -> "Повторяю неопознанные"
-            Mode.NEW -> "Начал разметку"
+        val what = when {
+            effective == Mode.REDO -> "Размечаю заново (твои правки и оценки сохранены)"
+            effective == Mode.RETRY -> "Повторяю неопознанные"
+            untagged == 0 -> "Уточняю уже размеченные песни через серверный ИИ"
+            else -> "Начал разметку"
         }
         return "$what: песен $untagged. Идёт в фоне, можно пользоваться телефоном. Когда закончу, пришлю уведомление."
     }
@@ -103,7 +105,8 @@ object MusicTagger {
             val music = MusicLibrary.index(app).allMusic()
             if (music.isEmpty()) return@launch
             val untagged = untaggedCount(app, music)
-            if (untagged == 0) {
+            val serverPending = if (ServerMusicAnalyzer.isConfigured()) serverPendingCount(app, music) else 0
+            if (untagged == 0 && serverPending == 0) {
                 // Таблица должна существовать и после полной разметки
                 if (!MusicCatalog.file().exists() && MusicTags.count(app) > 0) MusicCatalog.scheduleExport(app)
                 return@launch
@@ -139,6 +142,12 @@ object MusicTagger {
         }
         return untagged
     }
+
+    private fun serverPendingCount(context: Context, music: List<MusicTrack>): Int =
+        music.distinctBy { MusicTags.trackKey(it) }.count { track ->
+            val tags = MusicTags.get(context, track)
+            tags?.edited != true && tags?.webTried != true
+        }
 
     // ---------------------------------------------------------------- работа
 
@@ -176,7 +185,8 @@ object MusicTagger {
             return
         }
         val candidates = music.distinctBy { MusicTags.trackKey(it) }.filter {
-            MusicTags.get(context, it)?.edited != true
+            val tags = MusicTags.get(context, it)
+            tags?.edited != true && tags?.webTried != true
         }
         if (candidates.isEmpty()) return
         phase = "Уточняю настроение и жанры через интернет"
