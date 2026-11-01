@@ -46,12 +46,26 @@ object LocalMoodAnalyzer {
         return result
     }
 
+    /** Вес сегмента — только уникальная часть временной шкалы, без повторного учёта перекрытий. */
+    internal fun segmentWeights(segments: List<MoodSegment>, durationSeconds: Int): List<Double> {
+        if (segments.isEmpty()) return emptyList()
+        val centers = segments.map { (it.startSeconds + it.endSeconds) / 2.0 }
+        return segments.indices.map { index ->
+            val left = if (index == 0) 0.0 else (centers[index - 1] + centers[index]) / 2.0
+            val right = if (index == segments.lastIndex) durationSeconds.toDouble()
+                else (centers[index] + centers[index + 1]) / 2.0
+            (right.coerceAtMost(durationSeconds.toDouble()) - left.coerceAtLeast(0.0)).coerceAtLeast(0.0)
+        }
+    }
+
     private fun aggregateSegmentScores(sampleRate: Int, whole: MoodAnalysis, segments: List<MoodSegment>): MoodAnalysis {
         val keys = whole.scores.keys.toList()
         val weighted = DoubleArray(keys.size)
         var totalWeight = 0.0
-        for (segment in segments) {
-            val weight = (segment.endSeconds - segment.startSeconds).toDouble().coerceAtLeast(1.0)
+        val durationSeconds = segments.maxOfOrNull { it.endSeconds } ?: 0
+        val weights = segmentWeights(segments, durationSeconds)
+        for ((index, segment) in segments.withIndex()) {
+            val weight = weights[index]
             for (i in keys.indices) weighted[i] += (segment.scores[keys[i]] ?: 0) * weight
             totalWeight += weight
         }
