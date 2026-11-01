@@ -2,14 +2,14 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:minHeight="76dp"
+    android:minHeight="82dp"
     android:layout_marginStart="10dp" android:layout_marginEnd="10dp"
     android:layout_marginTop="4dp" android:layout_marginBottom="4dp"
-    android:background="@drawable/music_row_bg"
+    android:background="@drawable/harmonia_row_bg"
     android:gravity="center_vertical" android:orientation="horizontal"
     android:paddingStart="10dp" android:paddingTop="9dp" android:paddingEnd="4dp" android:paddingBottom="9dp">
 
-    <FrameLayout android:layout_width="58dp" android:layout_height="58dp">
+    <FrameLayout android:layout_width="62dp" android:layout_height="62dp">
         <com.google.android.material.imageview.ShapeableImageView
             android:id="@+id/cover" android:layout_width="match_parent" android:layout_height="match_parent"
             android:scaleType="centerCrop" android:src="@drawable/cover_placeholder"
@@ -25,16 +25,16 @@
         android:layout_weight="1" android:orientation="vertical">
         <TextView
             android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:ellipsize="end" android:maxLines="1" android:textColor="@color/music_text" android:textSize="16sp"
+            android:ellipsize="end" android:maxLines="1" android:textColor="@color/harmonia_text" android:textSize="16sp"
             android:textStyle="bold" />
         <TextView
             android:id="@+id/subtitle" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="1dp" android:ellipsize="end" android:maxLines="1"
-            android:textColor="@color/music_text_dim" android:textSize="13sp" />
+            android:textColor="@color/harmonia_muted" android:textSize="13sp" />
         <TextView
             android:id="@+id/tags" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="1dp" android:ellipsize="end" android:maxLines="1"
-            android:textColor="@color/music_accent" android:textSize="12sp" android:visibility="gone" />
+            android:textColor="@color/harmonia_cyan" android:textSize="12sp" android:visibility="gone" />
     </LinearLayout>
 
     <ImageButton
