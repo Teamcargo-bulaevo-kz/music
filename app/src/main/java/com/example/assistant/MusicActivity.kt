@@ -86,7 +86,7 @@ class MusicActivity : AppCompatActivity() {
     private lateinit var search: EditText
     private lateinit var status: TextView
     private lateinit var loadingHint: TextView
-    private lateinit var screenTitle
+    private lateinit var screenTitle: TextView
     private lateinit var mini: LinearLayout
     private lateinit var miniProgress: ProgressBar
     private lateinit var miniTitle: TextView
