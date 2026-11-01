@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="match_parent"
-    android:background="@color/music_bg" android:orientation="vertical">
+    android:background="@drawable/harmonia_background" android:orientation="vertical">
 
     <LinearLayout
         android:layout_width="match_parent" android:layout_height="wrap_content"
@@ -11,12 +11,12 @@
         <TextView
             android:id="@+id/screenTitle" android:layout_width="0dp" android:layout_height="wrap_content"
             android:ellipsize="end" android:maxLines="1"
-            android:layout_weight="1" android:text="Harmonia" android:textColor="@color/music_text"
-            android:textSize="28sp" android:textStyle="bold" />
+            android:layout_weight="1" android:text="Harmonia" android:textColor="@color/harmonia_text"
+            android:textSize="30sp" android:textStyle="bold" />
         <ImageButton
             android:id="@+id/shuffleAll" android:layout_width="48dp" android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Вперемешку"
-            android:padding="12dp" android:scaleType="fitCenter" android:src="@drawable/ic_shuffle" android:tint="@color/music_accent" />
+            android:padding="12dp" android:scaleType="fitCenter" android:src="@drawable/ic_shuffle" android:tint="@color/harmonia_cyan" />
         <ImageButton
             android:id="@+id/moreButton" android:layout_width="48dp" android:layout_height="48dp"
             android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Ещё"
@@ -26,15 +26,15 @@
     <EditText
         android:id="@+id/search" android:layout_width="match_parent" android:layout_height="48dp"
         android:layout_marginStart="16dp" android:layout_marginTop="8dp" android:layout_marginEnd="16dp"
-        android:background="@drawable/search_bg" android:drawableStart="@drawable/ic_search"
-        android:drawablePadding="10dp" android:drawableTint="@color/music_text_dim" android:hint="Поиск песен и исполнителей"
+        android:background="@drawable/harmonia_search_bg" android:drawableStart="@drawable/ic_search"
+        android:drawablePadding="10dp" android:drawableTint="@color/harmonia_muted" android:hint="Поиск песен и исполнителей"
         android:imeOptions="actionSearch" android:inputType="text" android:maxLines="1"
         android:paddingStart="16dp" android:paddingEnd="16dp" android:textColor="@color/music_text"
         android:textColorHint="@color/music_text_dim" android:textSize="15sp" />
 
     <com.google.android.material.tabs.TabLayout
         android:id="@+id/tabs" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_marginTop="6dp" android:background="@color/music_bg"
+        android:layout_marginTop="6dp" android:background="@drawable/harmonia_background"
         app:tabIndicatorColor="@color/music_accent" app:tabIndicatorFullWidth="false" app:tabIndicatorHeight="3dp"
         app:tabMode="scrollable" app:tabRippleColor="@null" app:tabTextAppearance="@style/MusicTabText"
         app:tabSelectedTextColor="@color/music_accent" app:tabTextColor="@color/music_text_dim" />
@@ -53,7 +53,7 @@
     <LinearLayout
         android:id="@+id/miniPlayer" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:layout_marginStart="10dp" android:layout_marginEnd="10dp" android:layout_marginBottom="10dp"
-        android:background="@drawable/mini_bg" android:orientation="vertical" android:visibility="gone">
+        android:background="@drawable/harmonia_mini_bg" android:orientation="vertical" android:visibility="gone">
         <LinearLayout
             android:layout_width="match_parent" android:layout_height="68dp" android:gravity="center_vertical"
             android:orientation="horizontal" android:paddingStart="10dp" android:paddingEnd="6dp">
@@ -89,6 +89,6 @@
             android:id="@+id/miniProgress" style="?android:attr/progressBarStyleHorizontal"
             android:layout_width="match_parent" android:layout_height="3dp" android:layout_marginStart="14dp"
             android:layout_marginEnd="14dp" android:layout_marginBottom="8dp"
-            android:progressTint="@color/music_accent" android:progressBackgroundTint="@color/music_stroke" />
+            android:progressTint="@color/music_accent" android:progressBackgroundTint="@color/harmonia_stroke" />
     </LinearLayout>
 </LinearLayout>
