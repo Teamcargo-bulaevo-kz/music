@@ -19,6 +19,8 @@ android {
         // Метка сборки видна в приложении: ветка и короткий номер коммита (в CI берутся из GitHub)
         buildConfigField("String", "BUILD_TAG", "\"${(System.getenv("GITHUB_REF_NAME") ?: "local").substringAfterLast('/')} ${(System.getenv("GITHUB_SHA") ?: "").take(7)}\"")
         buildConfigField("String", "GROQ_API_KEY", "\"${System.getenv("GROQ_API_KEY") ?: ""}\"")
+        buildConfigField("String", "MUSIC_INTELLIGENCE_URL", "\"${System.getenv("MUSIC_INTELLIGENCE_URL") ?: ""}\"")
+        buildConfigField("String", "MUSIC_INTELLIGENCE_TOKEN", "\"${System.getenv("MUSIC_INTELLIGENCE_TOKEN") ?: ""}\"")
     }
 
     buildTypes {
