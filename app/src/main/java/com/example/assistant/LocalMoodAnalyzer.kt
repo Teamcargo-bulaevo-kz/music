@@ -205,10 +205,19 @@ object LocalMoodAnalyzer {
         }
         // Убираем гармонические дубли: один и тот же пульс часто даёт пики на половинном
         // и двойном темпе. Сначала выбираем устойчивую музыкальную область, а не максимум BPM.
+        val byTempo = correlations.associate { it.first to it.second }
+        // Если сильный пик приходится на половинный темп, проверяем удвоенный:
+        // у регулярных ударов автокорреляция часто одинаково видна на каждом втором бите.
+        val octaveCorrected = when {
+            bpm <= 90 && bpm * 2 in 80..180 && (byTempo[bpm * 2] ?: 0.0) >= best * 0.28 -> bpm * 2
+            bpm >= 120 && bpm / 2 in 60..90 && (byTempo[bpm / 2] ?: 0.0) >= best * 0.92 -> bpm / 2
+            else -> bpm
+        }
         val plausible = correlations.filter { it.second >= best * 0.90 }
         val musicalRange = plausible.filter { it.first in 80..160 }
-        val selected = (if (musicalRange.isNotEmpty()) musicalRange else plausible)
-            .minByOrNull { abs(it.first - 120) }?.first ?: bpm
+        val selected = if (octaveCorrected != bpm) octaveCorrected
+            else (if (musicalRange.isNotEmpty()) musicalRange else plausible)
+                .minByOrNull { abs(it.first - 120) }?.first ?: bpm
         // Слабая корреляция — это отсутствие надёжного ритмического пульса, а не случайный BPM.
         val reliableTempo = if (best >= 0.12) selected else 0
         return best.coerceIn(0.0,1.0) to reliableTempo
