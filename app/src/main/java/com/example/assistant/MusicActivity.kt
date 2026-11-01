@@ -18,6 +18,9 @@ import android.widget.ImageView
 import android.widget.LinearLayout
 import android.widget.PopupMenu
 import android.widget.ProgressBar
+import android.widget.ArrayAdapter
+import android.widget.SeekBar
+import android.widget.Spinner
 import android.widget.TextView
 import android.widget.Toast
 import androidx.activity.OnBackPressedCallback
@@ -285,7 +288,86 @@ class MusicActivity : AppCompatActivity() {
             .setItems(available.map { it.first + " · " + it.second.size }.toTypedArray()) { _, which ->
                 val (name, tracks) = available[which]
                 openGroup(name, tracks)
-            }.setNegativeButton("Закрыть", null).show()
+            }.setNeutralButton("Своя подборка") { _, _ -> showCustomPlaylist() }
+            .setNegativeButton("Закрыть", null).show()
+    }
+
+    /** Пользователь сам задаёт настроение, нижнюю границу энергии и диапазон BPM. */
+    private fun showCustomPlaylist() {
+        val content = LinearLayout(this).apply {
+            orientation = LinearLayout.VERTICAL
+            setPadding(24, 8, 24, 0)
+        }
+        fun label(text: String) = TextView(this).apply {
+            this.text = text
+            textSize = 14f
+            setTextColor(0xFFE8E8F0.toInt())
+            setPadding(0, 12, 0, 4)
+        }
+        val moodKeys = listOf("Любое настроение") + MusicTags.moods.keys.toList()
+        val moodSpinner = Spinner(this).apply {
+            adapter = ArrayAdapter(this@MusicActivity, android.R.layout.simple_spinner_dropdown_item,
+                listOf("Любое настроение") + MusicTags.moods.values.toList())
+        }
+        val energyLabel = label("Минимальная энергичность: 1 из 5")
+        val energySeek = SeekBar(this).apply {
+            max = 4
+            progress = 0
+        }
+        val minBpm = EditText(this).apply {
+            hint = "От BPM (например, 90)"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setSingleLine(true)
+        }
+        val maxBpm = EditText(this).apply {
+            hint = "До BPM (например, 150)"
+            inputType = android.text.InputType.TYPE_CLASS_NUMBER
+            setSingleLine(true)
+        }
+        content.addView(label("Настроение"))
+        content.addView(moodSpinner)
+        content.addView(energyLabel)
+        content.addView(energySeek)
+        content.addView(label("Темп — необязательно"))
+        content.addView(minBpm)
+        content.addView(maxBpm)
+        energySeek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
+            override fun onProgressChanged(seekBar: SeekBar?, progress: Int, fromUser: Boolean) {
+                energyLabel.text = "Минимальная энергичность: ${progress + 1} из 5"
+            }
+            override fun onStartTrackingTouch(seekBar: SeekBar?) {}
+            override fun onStopTrackingTouch(seekBar: SeekBar?) {}
+        })
+        AlertDialog.Builder(this).setTitle("Своя подборка")
+            .setView(content)
+            .setPositiveButton("Показать") { _, _ ->
+                val moodIndex = moodSpinner.selectedItemPosition
+                val mood = moodKeys.getOrNull(moodIndex)
+                val low = minBpm.text.toString().toIntOrNull()?.coerceIn(40, 240) ?: 0
+                val high = maxBpm.text.toString().toIntOrNull()?.coerceIn(40, 240) ?: 0
+                if (low > 0 && high > 0 && low > high) {
+                    Toast.makeText(this, "Минимальный BPM не может быть выше максимального", Toast.LENGTH_LONG).show()
+                    showCustomPlaylist()
+                    return@setPositiveButton
+                }
+                val minimumEnergy = energySeek.progress + 1
+                val selected = allTracks.filter { track ->
+                    val t = MusicTags.get(this, track)
+                    t != null && MusicTags.isTagged(t) && t.liked >= 0 &&
+                        (moodIndex == 0 || (mood in t.moods || (t.moodScores[mood] ?: 0) >= 10)) &&
+                        t.energy >= minimumEnergy &&
+                        (low == 0 || t.bpm == 0 || t.bpm >= low) &&
+                        (high == 0 || t.bpm == 0 || t.bpm <= high)
+                }
+                if (selected.isEmpty()) {
+                    Toast.makeText(this, "Подходящих размеченных песен не найдено", Toast.LENGTH_LONG).show()
+                } else {
+                    val moodName = if (moodIndex == 0) "любое настроение" else MusicTags.moods[mood].orEmpty()
+                    val title = "Своя: $moodName · энергия от $minimumEnergy" +
+                        if (low > 0 || high > 0) " · ${low.takeIf { it > 0 } ?: 40}–${high.takeIf { it > 0 } ?: 240} BPM" else ""
+                    openGroup(title, selected)
+                }
+            }.setNegativeButton("Отмена", null).show()
     }
     /** Выполняет блокирующее действие в фоне и показывает его результат. */
     private fun runInBackground(action: () -> String) {
