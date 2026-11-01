@@ -159,7 +159,42 @@ object MusicTagger {
         try { MusicCatalog.syncOnStart(context) } catch (_: Exception) {}
         val music = MusicLibrary.index(context, force = true).allMusic()
         phaseLocal(context, music)
+        phaseServer(context, music)
         try { MusicCatalog.exportNow(context) } catch (_: Exception) {}
+    }
+
+    /**
+     * Enriches the complete library in small batches using public web metadata.
+     * If no server URL is configured or the network is unavailable, local analysis remains intact.
+     */
+    private suspend fun phaseServer(context: Context, music: List<MusicTrack>) {
+        if (!ServerMusicAnalyzer.isConfigured()) {
+            phase = "Локальный анализ завершён; серверный ИИ не подключён"
+            total = 0
+            done = 0
+            notifyProgress(context)
+            return
+        }
+        val candidates = music.distinctBy { MusicTags.trackKey(it) }.filter {
+            MusicTags.get(context, it)?.edited != true
+        }
+        if (candidates.isEmpty()) return
+        phase = "Уточняю настроение и жанры через интернет"
+        total = candidates.size
+        done = 0
+        notifyProgress(context)
+        for (batch in candidates.chunked(10)) {
+            try {
+                val enriched = ServerMusicAnalyzer.analyze(context, batch)
+                if (enriched.isNotEmpty()) MusicTags.putAll(context, enriched)
+            } catch (e: Exception) {
+                lastError = "серверный анализ: " + (e.message?.take(90) ?: "ошибка сети")
+                break
+            }
+            done = (done + batch.size).coerceAtMost(total)
+            notifyProgress(context)
+            kotlinx.coroutines.yield()
+        }
     }
 
     /** Офлайн-разметка: декодируем до четырёх минут аудио с пониженной частотой дискретизации и считаем распределение настроений. */
