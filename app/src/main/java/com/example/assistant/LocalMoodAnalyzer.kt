@@ -203,9 +203,15 @@ object LocalMoodAnalyzer {
             correlations += candidate to corr
             if(corr>best){best=corr;bpm=candidate}
         }
-        // Если 60 и 120 BPM одинаково хорошо объясняют атаки, предпочитаем основной быстрый пульс.
-        val selected = correlations.filter { it.second >= best * 0.985 }.maxByOrNull { it.first }
-        return best.coerceIn(0.0,1.0) to (selected?.first ?: bpm)
+        // Убираем гармонические дубли: один и тот же пульс часто даёт пики на половинном
+        // и двойном темпе. Сначала выбираем устойчивую музыкальную область, а не максимум BPM.
+        val plausible = correlations.filter { it.second >= best * 0.985 }
+        val musicalRange = plausible.filter { it.first in 80..160 }
+        val selected = (if (musicalRange.isNotEmpty()) musicalRange else plausible)
+            .minByOrNull { abs(it.first - 120) }?.first ?: bpm
+        // Слабая корреляция — это отсутствие надёжного ритмического пульса, а не случайный BPM.
+        val reliableTempo = if (best >= 0.12) selected else 0
+        return best.coerceIn(0.0,1.0) to reliableTempo
     }
 
     /** Процентное распределение оценок: сумма ровно 100. Это не медицинская и не объективная вероятность. */
