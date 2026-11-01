@@ -251,7 +251,9 @@ object MusicTagger {
                     genreLabel = genreText, tempo = tempo, description = result.description,
                     confidence = result.confidence, source = TrackTags.SOURCE_LOCAL,
                     liked = old?.liked ?: 0, artist = track.artist, title = track.title,
-                    album = track.album, moodScores = result.scores, segments = result.segments
+                    album = track.album, moodScores = result.scores, segments = result.segments,
+                    bpm = result.bpm, valence = result.valence, arousal = result.arousal,
+                    tension = result.tension, danceability = result.danceability
                 )
             } catch (e: Exception) {
                 updates[key] = (old ?: TrackTags(
