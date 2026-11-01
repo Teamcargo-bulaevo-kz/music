@@ -87,7 +87,8 @@ object MusicTagger {
             untagged == 0 -> "Уточняю уже размеченные песни через серверный ИИ"
             else -> "Начал разметку"
         }
-        return "$what: песен $untagged. Идёт в фоне, можно пользоваться телефоном. Когда закончу, пришлю уведомление."
+        val workCount = if (untagged > 0) untagged else serverPending
+        return "$what: песен $workCount. Идёт в фоне, можно пользоваться телефоном. Когда закончу, пришлю уведомление."
     }
 
     /**
@@ -196,7 +197,18 @@ object MusicTagger {
         for (batch in candidates.chunked(10)) {
             try {
                 val enriched = ServerMusicAnalyzer.analyze(context, batch)
-                if (enriched.isNotEmpty()) MusicTags.putAll(context, enriched)
+                val updates = LinkedHashMap(enriched)
+                for (track in batch) {
+                    val key = MusicTags.trackKey(track)
+                    if (key in updates) continue
+                    val current = MusicTags.get(context, track)
+                    if (current?.edited == true) continue
+                    updates[key] = (current ?: TrackTags(
+                        genre = "other", mood = "calm", energy = 3, confidence = 0,
+                        source = TrackTags.SOURCE_WEB, artist = track.artist, title = track.title, album = track.album
+                    )).copy(webTried = true, aiTried = true)
+                }
+                if (updates.isNotEmpty()) MusicTags.putAll(context, updates)
             } catch (e: Exception) {
                 lastError = "серверный анализ: " + (e.message?.take(90) ?: "ошибка сети")
                 break
