@@ -13,7 +13,8 @@ GROQ_API_KEY=... NOVA_CLIENT_TOKEN=... PORT=8787 npm start
 - `GET /health`
 - `POST /v1/analyze` with JSON `{"tracks":[{"key":"...","title":"...","artist":"...","album":"..."}]}`
 - Maximum 20 tracks per request and 256 KiB request body.
-- Configure `GROQ_API_KEY` and `NOVA_CLIENT_TOKEN` as deployment secrets.
+- Configure `GROQ_API_KEY` and `NOVA_CLIENT_TOKEN` as deployment secrets. The token is mandatory for analysis requests.
+- Basic per-IP limit: 20 requests per minute; also enable platform-level rate limiting.
 - The Android build receives the HTTPS endpoint and client token through CI environment variables `MUSIC_INTELLIGENCE_URL` and `MUSIC_INTELLIGENCE_TOKEN`.
 
 The client token is an access gate, not a substitute for provider-side rate limits: values embedded in an APK can be extracted. Deploy behind a platform with request throttling and monitor usage. Do not expose the Groq key to the Android client.
