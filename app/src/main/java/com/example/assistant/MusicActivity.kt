@@ -354,10 +354,8 @@ class MusicActivity : AppCompatActivity() {
                 val selected = allTracks.filter { track ->
                     val t = MusicTags.get(this, track)
                     t != null && MusicTags.isTagged(t) && t.liked >= 0 &&
-                        (moodIndex == 0 || (mood in t.moods || (t.moodScores[mood] ?: 0) >= 10)) &&
-                        t.energy >= minimumEnergy &&
-                        (low == 0 || t.bpm == 0 || t.bpm >= low) &&
-                        (high == 0 || t.bpm == 0 || t.bpm <= high)
+                        MusicTags.matchesPlaylistFilter(t, if (moodIndex == 0) null else mood,
+                            minimumEnergy, low, high)
                 }
                 if (selected.isEmpty()) {
                     Toast.makeText(this, "Подходящих размеченных песен не найдено", Toast.LENGTH_LONG).show()
