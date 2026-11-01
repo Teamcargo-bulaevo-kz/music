@@ -33,7 +33,8 @@ object ServerMusicAnalyzer {
                     .put("key", MusicTags.trackKey(track))
                     .put("title", track.title.take(180))
                     .put("artist", track.artist.take(180))
-                    .put("album", track.album.take(180)))
+                    .put("album", track.album.take(180))
+                    .put("durationMs", track.durationMs))
             }
         })
         val requestBuilder = Request.Builder()
