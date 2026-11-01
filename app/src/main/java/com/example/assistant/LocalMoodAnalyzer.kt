@@ -205,7 +205,7 @@ object LocalMoodAnalyzer {
         }
         // Убираем гармонические дубли: один и тот же пульс часто даёт пики на половинном
         // и двойном темпе. Сначала выбираем устойчивую музыкальную область, а не максимум BPM.
-        val plausible = correlations.filter { it.second >= best * 0.985 }
+        val plausible = correlations.filter { it.second >= best * 0.90 }
         val musicalRange = plausible.filter { it.first in 80..160 }
         val selected = (if (musicalRange.isNotEmpty()) musicalRange else plausible)
             .minByOrNull { abs(it.first - 120) }?.first ?: bpm
