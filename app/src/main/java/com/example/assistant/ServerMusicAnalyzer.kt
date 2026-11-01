@@ -56,6 +56,11 @@ object ServerMusicAnalyzer {
                 val track = tracksByKey[key] ?: continue
                 val current = MusicTags.get(context, track)
                 if (current?.edited == true) continue
+                val matchConfidence = item.optInt("confidence", 0).coerceIn(0, 100)
+                if (current != null && matchConfidence < 45) {
+                    result[key] = current.copy(webTried = true, aiTried = true)
+                    continue
+                }
                 val scoresObject = item.optJSONObject("moodScores") ?: continue
                 val serverScores = LinkedHashMap<String, Int>()
                 for (mood in MusicTags.moods.keys) {
@@ -85,7 +90,7 @@ object ServerMusicAnalyzer {
                     genreLabel = item.optString("genreLabel").ifBlank { current?.genreLabel.orEmpty() },
                     tempo = item.optString("tempo").ifBlank { current?.tempo.orEmpty() },
                     description = item.optString("description").ifBlank { current?.description.orEmpty() },
-                    confidence = item.optInt("confidence", 0).coerceIn(0, 100),
+                    confidence = matchConfidence,
                     source = TrackTags.SOURCE_WEB,
                     liked = current?.liked ?: 0,
                     edited = false,
