@@ -189,6 +189,7 @@ class MusicService : Service() {
                     errorsInRow = 0
                     prepared = true
                     if (wantPlay) it.start()
+                    BeatSource.attach(it.audioSessionId)
                     refreshState()
                 }
             }
@@ -276,6 +277,7 @@ class MusicService : Service() {
     }
 
     private fun releasePlayer() {
+        BeatSource.detach()
         player?.let {
             try {
                 it.setOnPreparedListener(null)

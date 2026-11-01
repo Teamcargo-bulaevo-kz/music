@@ -188,6 +188,10 @@ class MusicActivity : AppCompatActivity() {
         wanted.add(audioPermission())
         // Уведомление «музыка размечена» не покажется без этого разрешения
         if (Build.VERSION.SDK_INT >= 33) wanted.add(Manifest.permission.POST_NOTIFICATIONS)
+        // Нужно для живого фона, который пляшет в ритм музыке
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) {
+            wanted.add(Manifest.permission.RECORD_AUDIO)
+        }
         requestPermissions(wanted.toTypedArray(), 1)
     }
 
@@ -430,7 +434,7 @@ class MusicActivity : AppCompatActivity() {
     private fun folderRows(): List<Row> {
         val lists = PlaylistStore.load(this)
         val result = ArrayList<Row>()
-        result.add(Row("Новая папка", "Для бега, для прогулки, любая своя", badge = "＋", badgeColor = 0xFFFF6B4A.toInt()) { askFolderName("Новая папка", "") { createFolder(it) } })
+        result.add(Row("Новая папка", "Для бега, для прогулки, любая своя", badge = "＋", badgeColor = 0xFF6B5CFF.toInt()) { askFolderName("Новая папка", "") { createFolder(it) } })
         for ((name, tracks) in lists) {
             val resolved = tracks.mapNotNull { p -> allTracks.firstOrNull { it.id == p.id } ?: allTracks.firstOrNull { MusicTags.trackKey(it) == MusicTags.trackKey(p) } }
             result.add(Row(name, "${resolved.size} песен", onLong = { showFolderMenu(it, name) }, badge = "📁", badgeColor = colorFor(name)) { openGroup(name, resolved, folder = name) })

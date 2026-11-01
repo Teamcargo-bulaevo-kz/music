@@ -51,6 +51,7 @@ class PlayerActivity : AppCompatActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_player)
+        findViewById<FlameBackgroundView>(R.id.flameBackground).boost = 1.5f
         cover = findViewById(R.id.cover)
         title = findViewById(R.id.title)
         artist = findViewById(R.id.artist)
