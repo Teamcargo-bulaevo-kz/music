@@ -247,7 +247,7 @@ object MusicTags {
         .put("s", v.source).put("l", v.liked).put("ed", v.edited).put("w", v.webTried).put("at", v.aiTried).put("n", v.note)
         .put("ar", v.artist).put("ti", v.title).put("al", v.album)
         .put("mp", JSONObject().apply { for ((key, score) in v.moodScores) put(key, score) })
-        .put("bpm", v.bpm).put("vl", v.valence).put("ar", v.arousal).put("tn", v.tension).put("dy", v.danceability)
+        .put("bpm", v.bpm).put("vl", v.valence).put("au", v.arousal).put("tn", v.tension).put("dy", v.danceability)
         .put("sg", JSONArray().apply { for (segment in v.segments) put(JSONObject().put("s", segment.startSeconds).put("e", segment.endSeconds).put("m", segment.mood).put("v", segment.valence).put("a", segment.arousal).put("t", segment.tension).put("sc", JSONObject().apply { for ((key, score) in segment.scores) put(key, score) })) })
 
     private fun fromJson(o: JSONObject): TrackTags {
@@ -262,7 +262,7 @@ object MusicTags {
             aiTried = o.optBoolean("at", false),
             note = o.optString("n"), artist = o.optString("ar"), title = o.optString("ti"), album = o.optString("al"),
             bpm = o.optInt("bpm", 0).coerceIn(0, 300), valence = o.optInt("vl", 0).coerceIn(0, 100),
-            arousal = o.optInt("ar", 0).coerceIn(0, 100), tension = o.optInt("tn", 0).coerceIn(0, 100),
+            arousal = o.optInt("au", 0).coerceIn(0, 100), tension = o.optInt("tn", 0).coerceIn(0, 100),
             danceability = o.optInt("dy", 0).coerceIn(0, 100),
             moodScores = o.optJSONObject("mp")?.let { scores ->
                 val values = LinkedHashMap<String, Int>()
