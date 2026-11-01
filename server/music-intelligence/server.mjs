@@ -5,6 +5,18 @@ const GROQ_API_KEY = process.env.GROQ_API_KEY || "";
 const NOVA_CLIENT_TOKEN = process.env.NOVA_CLIENT_TOKEN || "";
 const MODEL = process.env.GROQ_MODEL || "openai/gpt-oss-120b";
 const MAX_BODY = 256 * 1024;
+const rateWindow = new Map();
+function rateAllowed(ip) {
+  const now = Date.now();
+  const state = rateWindow.get(ip);
+  if (!state || now - state.started > 60_000) {
+    rateWindow.set(ip, { started: now, count: 1 });
+    return true;
+  }
+  if (state.count >= 20) return false;
+  state.count += 1;
+  return true;
+}
 const MOODS = ["energetic", "calm", "happy", "sad", "romantic", "dance", "focus", "epic", "dark"];
 
 function json(res, status, value) {
@@ -95,7 +107,9 @@ async function analyze(tracks) {
 const server = http.createServer(async (req, res) => {
   if (req.method === "GET" && req.url === "/health") return json(res, 200, { ok: true, service: "nova-music-intelligence" });
   if (req.method !== "POST" || req.url !== "/v1/analyze") return json(res, 404, { error: "NOT_FOUND" });
-  if (NOVA_CLIENT_TOKEN && req.headers.authorization !== `Bearer ${NOVA_CLIENT_TOKEN}`) return json(res, 401, { error: "UNAUTHORIZED" });
+  if (!NOVA_CLIENT_TOKEN) return json(res, 503, { error: "SERVER_CLIENT_TOKEN_NOT_CONFIGURED" });
+  if (req.headers.authorization !== `Bearer ${NOVA_CLIENT_TOKEN}`) return json(res, 401, { error: "UNAUTHORIZED" });
+  if (!rateAllowed(req.socket.remoteAddress || "unknown")) return json(res, 429, { error: "RATE_LIMITED" });
   try {
     const body = await readBody(req);
     if (!Array.isArray(body.tracks) || body.tracks.length < 1 || body.tracks.length > 20) {
