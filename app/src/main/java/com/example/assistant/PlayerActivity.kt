@@ -241,41 +241,110 @@ class PlayerActivity : AppCompatActivity() {
         val track = PlayerState.track ?: return
         val tags = MusicTags.get(this, track)
         if (tags == null || tags.segments.isEmpty()) {
-            Toast.makeText(this, "Для этой песни пока нет анализа по фрагментам. Запусти разметку музыки заново.", Toast.LENGTH_LONG).show()
+            Toast.makeText(this, "Для этой песни пока нет анализа по фрагментам. Запусти разметку музыки.", Toast.LENGTH_LONG).show()
             return
         }
         val density = resources.displayMetrics.density
         fun dp(value: Int) = (value * density).toInt()
         val content = android.widget.LinearLayout(this).apply {
             orientation = android.widget.LinearLayout.VERTICAL
-            setPadding(dp(20), dp(12), dp(20), dp(12))
+            setPadding(dp(18), dp(12), dp(18), dp(12))
         }
-        val header = TextView(this).apply {
-            text = "Позитивность ${tags.segments.map { it.valence }.average().toInt()}% · возбуждение ${tags.segments.map { it.arousal }.average().toInt()}% · напряжение ${tags.segments.map { it.tension }.average().toInt()}%"
-            textSize = 14f
-            setTextColor(getColor(R.color.music_text))
+        val intro = TextView(this).apply {
+            text = "Распределение оценок настроения. В каждом блоке сумма долей — 100%; это относительная оценка алгоритма, а не вероятность."
+            textSize = 13f
+            setTextColor(getColor(R.color.music_text_dim))
+            setPadding(0, 0, 0, dp(12))
         }
-        content.addView(header)
-        tags.segments.forEachIndexed { index, segment ->
-            val start = PlayerState.formatTime(segment.startSeconds * 1000)
-            val end = PlayerState.formatTime(segment.endSeconds * 1000)
-            val mood = MusicTags.moods[segment.mood] ?: segment.mood
-            val line = TextView(this).apply {
-                text = "${index + 1}. $start–$end · $mood\nПозитивность ${segment.valence}% · возбуждение ${segment.arousal}% · напряжение ${segment.tension}%"
-                textSize = 14f
+        content.addView(intro)
+        if (tags.moodScores.isNotEmpty()) {
+            val heading = TextView(this).apply {
+                text = "Вся композиция"
+                textSize = 16f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
                 setTextColor(getColor(R.color.music_text))
-                setPadding(0, dp(14), 0, dp(14))
+                setPadding(0, 0, 0, dp(8))
             }
-            content.addView(line)
+            content.addView(heading)
+            addMoodDistribution(content, tags.moodScores, dp(10))
+        }
+        tags.segments.forEachIndexed { index, segment ->
+            val startTime = PlayerState.formatTime(segment.startSeconds * 1000)
+            val endTime = PlayerState.formatTime(segment.endSeconds * 1000)
+            val block = android.widget.LinearLayout(this).apply {
+                orientation = android.widget.LinearLayout.VERTICAL
+                setPadding(0, dp(12), 0, dp(12))
+            }
+            val title = TextView(this).apply {
+                text = "${index + 1}. ${startTime} – ${endTime} · ${MusicTags.moods[segment.mood] ?: segment.mood}"
+                textSize = 14f
+                setTypeface(typeface, android.graphics.Typeface.BOLD)
+                setTextColor(getColor(R.color.music_text))
+            }
+            block.addView(title)
+            if (segment.scores.isNotEmpty()) {
+                addMoodDistribution(block, segment.scores, dp(7))
+            } else {
+                val fallback = TextView(this).apply {
+                    text = "Позитивность ${segment.valence}% · возбуждение ${segment.arousal}% · напряжение ${segment.tension}%"
+                    textSize = 12f
+                    setTextColor(getColor(R.color.music_text_dim))
+                }
+                block.addView(fallback)
+            }
+            content.addView(block)
             if (index < tags.segments.lastIndex) {
-                val divider = View(this).apply { setBackgroundColor(getColor(R.color.music_text_dim)); alpha = 0.25f }
+                val divider = View(this).apply {
+                    setBackgroundColor(getColor(R.color.music_text_dim))
+                    alpha = 0.20f
+                }
                 content.addView(divider, android.widget.LinearLayout.LayoutParams(-1, dp(1)))
             }
         }
         val scroll = android.widget.ScrollView(this).apply { addView(content) }
-        AlertDialog.Builder(this).setTitle("Эмоциональная карта: ${track.title}").setView(scroll)
+        AlertDialog.Builder(this).setTitle("Карта настроения · ${track.title}").setView(scroll)
             .setPositiveButton("Закрыть", null).show()
     }
+
+    /** Полная шкала девяти настроений: цветная полоса и точные доли, суммарно 100%. */
+    private fun addMoodDistribution(parent: android.widget.LinearLayout, scores: Map<String, Int>, gap: Int) {
+        val ordered = MusicTags.moods.keys.map { it to (scores[it] ?: 0).coerceAtLeast(0) }
+        val total = ordered.sumOf { it.second }
+        if (total <= 0) return
+        val colors = intArrayOf(
+            0xFFFF8A4C.toInt(), 0xFF55C9B5.toInt(), 0xFFFFD166.toInt(),
+            0xFF6C9EFF.toInt(), 0xFFEC8FC4.toInt(), 0xFF9B7BFF.toInt(),
+            0xFF69B8E8.toInt(), 0xFFFFA45B.toInt(), 0xFF8C879F.toInt()
+        )
+        val bar = android.widget.LinearLayout(this).apply {
+            orientation = android.widget.LinearLayout.HORIZONTAL
+            setBackgroundColor(getColor(R.color.music_stroke))
+            clipToOutline = true
+        }
+        ordered.forEachIndexed { i, entry ->
+            if (entry.second <= 0) return@forEachIndexed
+            val segment = View(this).apply { setBackgroundColor(colors[i]) }
+            bar.addView(segment, android.widget.LinearLayout.LayoutParams(0, (10 * resources.displayMetrics.density).toInt(), entry.second.toFloat()))
+        }
+        parent.addView(bar, android.widget.LinearLayout.LayoutParams(-1, (10 * resources.displayMetrics.density).toInt()).apply {
+            bottomMargin = gap
+        })
+        val lines = ordered.chunked(3).map { group ->
+            group.joinToString("   ·   ") { (key, value) ->
+                "${MusicTags.moodShort[key] ?: key} ${value}%"
+            }
+        }
+        lines.forEach { line ->
+            val text = TextView(this).apply {
+                this.text = line
+                textSize = 11f
+                setTextColor(getColor(R.color.music_text_dim))
+                setPadding(0, 0, 0, (2 * resources.displayMetrics.density).toInt())
+            }
+            parent.addView(text)
+        }
+    }
+
     private fun showQueue() {
         val queue = PlayerState.queue
         if (queue.isEmpty()) return
