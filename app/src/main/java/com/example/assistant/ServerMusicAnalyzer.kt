@@ -73,14 +73,14 @@ object ServerMusicAnalyzer {
                 val correction = 100 - normalized.values.sum()
                 val primary = MusicTags.moods.keys.maxByOrNull { normalized[it] ?: 0 } ?: "calm"
                 normalized[primary] = ((normalized[primary] ?: 0) + correction).coerceIn(0, 100)
-                val mood = item.optString("mood").takeIf { it in MusicTags.moods } ?: primary
+                val mood = primary
                 val serverGenre = item.optString("genre", "other").lowercase()
                 val genre = serverGenre.takeIf { it in MusicTags.genres } ?: "other"
                 result[key] = TrackTags(
                     genre = if (genre == "other" && current != null) current.genre else genre,
                     mood = mood,
                     energy = current?.energy ?: item.optInt("energy", 3).coerceIn(1, 5),
-                    moods = normalized.filterValues { it > 0 }.keys,
+                    moods = normalized.entries.sortedByDescending { it.value }.take(3).map { it.key }.toSet(),
                     genreLabel = item.optString("genreLabel").ifBlank { current?.genreLabel.orEmpty() },
                     tempo = item.optString("tempo").ifBlank { current?.tempo.orEmpty() },
                     description = item.optString("description").ifBlank { current?.description.orEmpty() },
