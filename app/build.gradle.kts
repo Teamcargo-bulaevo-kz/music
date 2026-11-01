@@ -1,80 +1,82 @@
-import java.net.URL
-
 plugins {
     id("com.android.application")
     id("org.jetbrains.kotlin.android")
-    id("org.jetbrains.kotlin.kapt")
 }
+
+// Идентификатор приложения в Google Play. ПОСЛЕ ПЕРВОЙ ПУБЛИКАЦИИ МЕНЯТЬ НЕЛЬЗЯ.
+// Пока не выбран: com.example.* Google Play не принимает, поэтому сборка bundleRelease ниже остановится с понятной ошибкой.
+val playApplicationId = "com.example.assistant"
 
 android {
     namespace = "com.example.assistant"
-    compileSdk = 34
+    compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.assistant"
+        applicationId = playApplicationId
         minSdk = 26
-        targetSdk = 34
-        versionCode = 38
-        versionName = "1.38"
-        // Только телефонные процессоры: без x86 приложение заметно легче
+        targetSdk = 36
+        versionCode = 39
+        versionName = "2.0.0"
+        // Только телефонные процессоры
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
-        // Метка сборки видна в приложении: ветка и короткий номер коммита (в CI берутся из GitHub)
+        // Метка сборки: ветка и короткий номер коммита (в CI берутся из GitHub)
         buildConfigField("String", "BUILD_TAG", "\"${(System.getenv("GITHUB_REF_NAME") ?: "local").substringAfterLast('/')} ${(System.getenv("GITHUB_SHA") ?: "").take(7)}\"")
+        // ВРЕМЕННО: ключ ИИ-разметки попадает в APK. До публикации перенести запросы на свой сервер.
         buildConfigField("String", "GROQ_API_KEY", "\"${System.getenv("GROQ_API_KEY") ?: ""}\"")
     }
 
+    // Подпись релиза: ключ и пароли берутся из переменных окружения (в CI из секретов), в репозитории их нет
+    val releaseStoreFile = System.getenv("RELEASE_STORE_FILE")
+    signingConfigs {
+        if (releaseStoreFile != null) {
+            create("release") {
+                storeFile = file(releaseStoreFile)
+                storePassword = System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias = System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+            }
+        }
+    }
+
     buildTypes {
-        release { isMinifyEnabled = false }
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+            if (releaseStoreFile != null) signingConfig = signingConfigs.getByName("release")
+        }
     }
 
     buildFeatures { buildConfig = true }
-
-    // Модель весит около 130 МБ и почти не сжимается — не тратим время на упаковку
-    androidResources { noCompress += listOf("onnx") }
 
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_17
         targetCompatibility = JavaVersion.VERSION_17
     }
     kotlinOptions { jvmTarget = "17" }
+
+    // Для Google Play нужен App Bundle: он сам режет приложение под каждый телефон
+    bundle {
+        language { enableSplit = false }
+    }
 }
 
-val sherpaAar = layout.projectDirectory.file("libs/sherpa-onnx-1.13.8.aar")
-tasks.register("downloadSherpaAar") {
-    outputs.file(sherpaAar)
-    doLast {
-        val target = sherpaAar.asFile
-        if (!target.exists() || target.length() < 1_000_000L) {
-            target.parentFile.mkdirs()
-            val temp = target.resolveSibling(target.name + ".part")
-            URL("https://github.com/k2-fsa/sherpa-onnx/releases/download/v1.13.8/sherpa-onnx-1.13.8.aar").openStream().use { input ->
-                temp.outputStream().use { output -> input.copyTo(output) }
-            }
-            check(temp.length() > 1_000_000L) { "Sherpa-ONNX AAR download failed or was incomplete" }
-            if (!temp.renameTo(target)) {
-                temp.copyTo(target, overwrite = true)
-                temp.delete()
-            }
+// Защита от случайной публикации с учебным идентификатором
+tasks.matching { it.name == "bundleRelease" }.configureEach {
+    doFirst {
+        check(!playApplicationId.startsWith("com.example")) {
+            "Google Play не принимает идентификатор com.example.*. Задай свой в playApplicationId (app/build.gradle.kts)."
         }
     }
 }
-tasks.matching { it.name == "preBuild" }.configureEach { dependsOn("downloadSherpaAar") }
 
 dependencies {
-    implementation(files("libs/sherpa-onnx-1.13.8.aar"))
-    implementation("androidx.core:core-ktx:1.13.1")
+    implementation("androidx.core:core-ktx:1.15.0")
     implementation("androidx.appcompat:appcompat:1.7.0")
+    implementation("androidx.activity:activity-ktx:1.9.3")
     implementation("com.google.android.material:material:1.12.0")
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("org.jetbrains.kotlinx:kotlinx-coroutines-android:1.8.1")
-    implementation("org.apache.commons:commons-compress:1.27.1")
-    implementation("commons-io:commons-io:2.17.0")
-    implementation("dev.rikka.shizuku:api:13.1.5")
-    implementation("dev.rikka.shizuku:provider:13.1.5")
-
-    implementation("androidx.room:room-runtime:2.6.1")
-    implementation("androidx.room:room-ktx:2.6.1")
-    kapt("androidx.room:room-compiler:2.6.1")
 
     testImplementation("junit:junit:4.13.2")
     testImplementation("org.json:json:20231013")

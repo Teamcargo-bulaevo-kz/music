@@ -1,4 +1,18 @@
-app/src/main/assets/wake-model/
-app/libs/
+# Сборка и кэши
 build/
 .gradle/
+.kotlin/
+*.apk
+*.aab
+*.log
+
+# Секреты: ключи подписи и локальные настройки никогда не попадают в репозиторий
+*.jks
+*.keystore
+keystore.properties
+local.properties
+
+# Среды разработки
+.idea/
+*.iml
+.DS_Store

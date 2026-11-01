@@ -4,6 +4,7 @@ import android.content.Intent
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
+import android.view.View
 import android.widget.ImageButton
 import android.widget.ImageView
 import android.widget.SeekBar
@@ -19,10 +20,6 @@ import kotlinx.coroutines.withContext
 
 /** Полноэкранный плеер: обложка, перемотка, режимы, очередь, «ещё такое», таймер сна. */
 class PlayerActivity : AppCompatActivity() {
-
-    override fun attachBaseContext(newBase: android.content.Context) {
-        super.attachBaseContext(AppSettings.wrap(newBase))
-    }
 
     private val handler = Handler(Looper.getMainLooper())
     private var userSeeking = false
@@ -50,7 +47,9 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        edgeToEdge()
         setContentView(R.layout.activity_player)
+        findViewById<View>(R.id.content).padForSystemBars()
         findViewById<FlameBackgroundView>(R.id.flameBackground).boost = 1.5f
         cover = findViewById(R.id.cover)
         title = findViewById(R.id.title)

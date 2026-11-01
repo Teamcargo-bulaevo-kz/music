@@ -1,4 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
 <paths>
-    <external-path name="external_storage" path="." />
+    <!-- Только таблица и файлы для другого ИИ из личной папки приложения -->
+    <external-files-path name="music" path="Музыка/" />
 </paths>

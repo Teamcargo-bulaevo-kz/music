@@ -31,7 +31,7 @@ object MusicCatalog {
     private val jobLock = Any()
     private val exportLock = Any()
 
-    fun file(): File = File(SharedFolder.root(), FILE_NAME)
+    fun file(): File = File(MusicFiles.root(), FILE_NAME)
 
     // ---------------------------------------------------------------- подписи
 
@@ -101,7 +101,7 @@ object MusicCatalog {
     fun exportNow(context: Context): Boolean = synchronized(exportLock) { exportLocked(context) }
 
     private fun exportLocked(context: Context): Boolean {
-        if (!SharedFolder.ensure()) return false
+        if (!MusicFiles.ensure()) return false
         val tags = MusicTags.all(context)
         val device = MusicLibrary.index(context).allMusic()
         val byKey = LinkedHashMap<String, Row>()
@@ -164,7 +164,7 @@ object MusicCatalog {
      * читает её. Возвращает число обновлённых песен. Блокирующий.
      */
     fun syncOnStart(context: Context): Int {
-        if (!SharedFolder.ensure()) return 0
+        if (!MusicFiles.ensure()) return 0
         val f = file()
         if (!f.exists()) return 0
         val exported = prefs(context).getLong(KEY_EXPORTED, 0L)

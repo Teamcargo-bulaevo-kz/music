@@ -37,17 +37,6 @@ class MusicTagsTest {
         assertTrue(MusicTags.parseResponse("нет json").isEmpty())
     }
 
-    @Test fun localCommandsForMusicTags() {
-        val calm = LocalCommands.parse("включи спокойную музыку")!!
-        assertEquals("play_music", calm.name)
-        assertEquals("calm", calm.args["mood"])
-        assertEquals("rock", LocalCommands.parse("включи рок")!!.args["genre"])
-        assertEquals("analyze", LocalCommands.parse("проанализируй мою музыку")!!.args["action"])
-        assertEquals("export", LocalCommands.parse("выгрузи список песен")!!.args["action"])
-        // название песни не должно превращаться в настроение
-        assertNull(LocalCommands.parse("включи песню спокойной ночи")?.args?.get("mood"))
-    }
-
     @Test fun multipleMoodsFromTableText() {
         assertEquals(setOf("happy", "romantic"), MusicTags.moodsFromText("Весело, Романтично"))
         assertEquals(setOf("dark"), MusicTags.moodsFromText("Агрессивно/Мрачно"))
@@ -94,17 +83,5 @@ class MusicTagsTest {
         assertEquals(250L, MusicTagger.retryDelayMs("try again in 250ms"))
         assertEquals(3_720_000L, MusicTagger.retryDelayMs("try again in 1h2m"))
         assertNull(MusicTagger.retryDelayMs("no hint here"))
-    }
-
-    @Test fun likeAndFolderCommands() {
-        assertEquals("like", LocalCommands.parse("поставь лайк")!!.args["action"])
-        assertEquals("dislike", LocalCommands.parse("не нравится эта песня")!!.args["action"])
-        val tag = LocalCommands.parse("эта песня грустная")!!
-        assertEquals("tag", tag.args["action"])
-        assertEquals(listOf("sad"), tag.args["moods"])
-        val liked = LocalCommands.parse("включи любимое")!!
-        assertEquals("play_music", liked.name)
-        assertEquals(true, liked.args["liked"])
-        assertEquals("calm", LocalCommands.parse("включи любимые спокойные песни")!!.args["mood"])
     }
 }

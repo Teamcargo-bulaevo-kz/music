@@ -37,10 +37,6 @@ import kotlinx.coroutines.withContext
 /** Второе приложение «Музыка»: вся музыка телефона, настроения, жанры, исполнители, папки, проверка разметки и мини-плеер. */
 class MusicActivity : AppCompatActivity() {
 
-    override fun attachBaseContext(newBase: android.content.Context) {
-        super.attachBaseContext(AppSettings.wrap(newBase))
-    }
-
     /** Строка списка: трек или группа (настроение, жанр, исполнитель, папка). */
     private data class Row(
         val title: String, val subtitle: String, val track: MusicTrack? = null,
@@ -106,7 +102,9 @@ class MusicActivity : AppCompatActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        edgeToEdge()
         setContentView(R.layout.activity_music)
+        findViewById<View>(R.id.content).padForSystemBars()
         list = findViewById(R.id.list)
         tabs = findViewById(R.id.tabs)
         search = findViewById(R.id.search)
@@ -120,11 +118,6 @@ class MusicActivity : AppCompatActivity() {
         miniCover = findViewById(R.id.miniCover)
 
         sort = Sort.values().firstOrNull { it.name == prefs().getString("sort", null) } ?: Sort.NAME
-        status.setOnClickListener {
-            if (!SharedFolder.hasAccess() && Build.VERSION.SDK_INT >= 30) {
-                startActivity(Intent(Settings.ACTION_MANAGE_APP_ALL_FILES_ACCESS_PERMISSION, Uri.parse("package:$packageName")))
-            }
-        }
 
         list.layoutManager = LinearLayoutManager(this)
         list.adapter = adapter
@@ -230,9 +223,9 @@ class MusicActivity : AppCompatActivity() {
         val menu = PopupMenu(this, anchor)
         menu.menu.add(0, 1, 0, "Сортировка: ${sort.label}")
         menu.menu.add(0, 2, 1, "Разметить музыку")
-        menu.menu.add(0, 3, 2, "Подготовить для другого ИИ")
+        menu.menu.add(0, 3, 2, "Отправить песни другому ИИ")
         menu.menu.add(0, 4, 3, "Вставить ответ другого ИИ")
-        menu.menu.add(0, 5, 4, "Обновить таблицу Музыка.xlsx")
+        menu.menu.add(0, 5, 4, "Поделиться таблицей Музыка.xlsx")
         menu.menu.add(0, 6, 5, "Выбрать файл с разметкой…")
         menu.menu.add(0, 7, 6, "Разметить заново (правки сохранятся)")
         menu.menu.add(0, 8, 7, "Повторить неопознанные")
@@ -240,7 +233,7 @@ class MusicActivity : AppCompatActivity() {
             when (item.itemId) {
                 1 -> chooseSort()
                 2 -> runInBackground { MusicTagger.start(this) }
-                3 -> runInBackground { MusicAiPack.build(this) }
+                3 -> sendToOtherAi()
                 4 -> pasteAiAnswer()
                 6 -> pickTableLauncher.launch("*/*")
                 7 -> AlertDialog.Builder(this).setTitle("Разметить заново?")
@@ -248,14 +241,41 @@ class MusicActivity : AppCompatActivity() {
                     .setPositiveButton("Разметить") { _, _ -> runInBackground { MusicTagger.start(this, MusicTagger.Mode.REDO) } }
                     .setNegativeButton("Отмена", null).show()
                 8 -> runInBackground { MusicTagger.start(this, MusicTagger.Mode.RETRY) }
-                5 -> runInBackground {
-                    if (MusicCatalog.exportNow(this)) "Таблица обновлена: Assistant/${MusicCatalog.FILE_NAME}"
-                    else "Нет доступа к папке Assistant. Разреши доступ ко всем файлам."
-                }
+                5 -> shareTable()
             }
             true
         }
         menu.show()
+    }
+
+    /** Готовит таблицу Музыка.xlsx и открывает системное меню «Поделиться» (почта, диск, мессенджеры). */
+    private fun shareTable() {
+        lifecycleScope.launch {
+            val ok = withContext(Dispatchers.IO) { try { MusicCatalog.exportNow(this@MusicActivity) } catch (e: Exception) { false } }
+            if (ok) shareFiles(listOf(MusicCatalog.file()), "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet")
+            else AlertDialog.Builder(this@MusicActivity).setMessage("Не получилось подготовить таблицу.").setPositiveButton("Ок", null).show()
+        }
+    }
+
+    /** Делит песни на части для другого ИИ и предлагает отправить файлы. */
+    private fun sendToOtherAi() {
+        lifecycleScope.launch {
+            val msg = withContext(Dispatchers.IO) { try { MusicAiPack.build(this@MusicActivity) } catch (e: Exception) { "Ошибка: ${e.message}" } }
+            val files = MusicAiPack.partFiles()
+            val dialog = AlertDialog.Builder(this@MusicActivity).setMessage(msg)
+            if (files.isEmpty()) dialog.setPositiveButton("Ок", null)
+            else dialog.setPositiveButton("Отправить") { _, _ -> shareFiles(files, "text/plain") }.setNegativeButton("Позже", null)
+            dialog.show()
+            rebuild()
+        }
+    }
+
+    private fun shareFiles(files: List<java.io.File>, mime: String) {
+        val uris = ArrayList<Uri>(files.map { androidx.core.content.FileProvider.getUriForFile(this, "$packageName.fileprovider", it) })
+        val intent = Intent(if (uris.size == 1) Intent.ACTION_SEND else Intent.ACTION_SEND_MULTIPLE).setType(mime)
+            .addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+        if (uris.size == 1) intent.putExtra(Intent.EXTRA_STREAM, uris[0]) else intent.putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+        startActivity(Intent.createChooser(intent, "Отправить"))
     }
 
     /** Выполняет блокирующее действие в фоне и показывает его результат. */
@@ -377,7 +397,6 @@ class MusicActivity : AppCompatActivity() {
         val tab = tabs.selectedTabPosition.coerceAtLeast(0)
         val tagged = MusicTags.count(this)
         val parts = ArrayList<String>()
-        if (!SharedFolder.hasAccess()) parts.add("⚠ Нет доступа ко всем файлам: таблица Музыка.xlsx не сохранится при переустановке. Нажми сюда, чтобы разрешить.")
         if (running) parts.add("⏳ " + MusicTagger.progressText())
         else if (tagged < allTracks.size && tab in 1..2) parts.add("Размечено $tagged из ${allTracks.size}. Нажми «Разметить», чтобы определить остальные.")
         if (tab == reviewTab && drillTracks == null) parts.add("Здесь песни, в которых я не уверен. Открой, поправь или нажми «Всё верно».")
