@@ -31,6 +31,8 @@ class SpectrumGlowView @JvmOverloads constructor(
     private var lastFrameNanos = 0L
     private var previousEnergy = 0f
     private var pulse = 0f
+    private var paletteEnergy = 0f
+    private var paletteStep = -1
     private var hasSignal = false
     private var gradient: LinearGradient? = null
     private var glowGradient: LinearGradient? = null
@@ -45,17 +47,7 @@ class SpectrumGlowView @JvmOverloads constructor(
     override fun onSizeChanged(w: Int, h: Int, oldw: Int, oldh: Int) {
         super.onSizeChanged(w, h, oldw, oldh)
         if (w <= 0) return
-        val colors = intArrayOf(
-            Color.rgb(65, 205, 232),
-            Color.rgb(91, 151, 255),
-            Color.rgb(139, 119, 255),
-            Color.rgb(190, 119, 244),
-            Color.rgb(239, 132, 202),
-            Color.rgb(255, 171, 132)
-        )
-        val stops = floatArrayOf(0f, 0.19f, 0.40f, 0.63f, 0.84f, 1f)
-        gradient = LinearGradient(0f, 0f, w.toFloat(), 0f, colors, stops, Shader.TileMode.CLAMP)
-        glowGradient = LinearGradient(0f, 0f, w.toFloat(), 0f, colors, stops, Shader.TileMode.CLAMP)
+        updatePalette(w.toFloat(), 0f, force = true)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -86,7 +78,7 @@ class SpectrumGlowView @JvmOverloads constructor(
                 }
                 val normalized = (ln(1.0 + magnitude * 2.0) / ln(1.0 + 180.0)).toFloat()
                 val target = (normalized * 0.82f).coerceIn(0.025f, 0.82f)
-                val tau = if (target > levels[i]) 0.20f else 0.48f
+                val tau = if (target > levels[i]) 0.38f else 0.82f
                 val blend = 1f - exp(-dt / tau)
                 levels[i] += (target - levels[i]) * blend
                 energy += levels[i] / pointCount
@@ -96,30 +88,33 @@ class SpectrumGlowView @JvmOverloads constructor(
                 (1f - exp(-dt / 0.32f))
             previousEnergy = energy
         } else {
-            for (i in levels.indices) levels[i] *= (1f - exp(-dt / 0.55f))
-            pulse *= (1f - exp(-dt / 0.4f))
+            for (i in levels.indices) levels[i] *= (1f - exp(-dt / 0.75f))
+            pulse *= (1f - exp(-dt / 0.55f))
+            energy = 0f
         }
+        paletteEnergy += (energy.coerceIn(0f, 0.72f) - paletteEnergy) * (1f - exp(-dt / 2.8f))
+        updatePalette(width.toFloat(), paletteEnergy)
 
         // Пространственное сглаживание соединяет соседние зоны в одно текучее поле.
         for (i in 0 until pointCount) {
             val left = levels[(i - 1).coerceAtLeast(0)]
             val center = levels[i]
             val right = levels[(i + 1).coerceAtMost(pointCount - 1)]
-            smoothed[i] = left * 0.24f + center * 0.52f + right * 0.24f
+            smoothed[i] = left * 0.18f + center * 0.64f + right * 0.18f
         }
 
         val w = width.toFloat()
         val h = height.toFloat()
         if (w <= 0f || h <= 0f) return
-        val base = h * 0.91f
-        val minY = h * 0.34f
-        val amplitude = h * 0.48f
+        val base = h * 0.96f
+        val minY = h * 0.08f
+        val amplitude = h * 0.88f
         val points = FloatArray(pointCount * 2)
         for (i in 0 until pointCount) {
             val x = w * i / (pointCount - 1)
-            val organic = sin(phase + i * 0.19f) * 0.018f +
-                sin(phase * 0.63f - i * 0.11f) * 0.012f
-            val level = (smoothed[i] + organic + pulse * 0.22f).coerceIn(0.025f, 0.9f)
+            val organic = sin(phase + i * 0.13f) * 0.006f +
+                sin(phase * 0.57f - i * 0.08f) * 0.004f
+            val level = (smoothed[i] + organic + pulse * 0.12f).coerceIn(0.012f, 0.98f)
             points[i * 2] = x
             points[i * 2 + 1] = (base - amplitude * level).coerceIn(minY, base)
         }
@@ -165,6 +160,34 @@ class SpectrumGlowView @JvmOverloads constructor(
         paint.shader = null
         paint.style = Paint.Style.FILL
         if (hasSignal) postInvalidateOnAnimation()
+    }
+
+
+    private fun updatePalette(w: Float, energy: Float, force: Boolean = false) {
+        if (w <= 0f) return
+        val step = (energy.coerceIn(0f, 0.72f) / 0.72f * 32f).toInt().coerceIn(0, 32)
+        if (!force && step == paletteStep) return
+        paletteStep = step
+        val t = step / 32f
+        val calm = intArrayOf(
+            Color.rgb(76, 190, 218), Color.rgb(105, 151, 235), Color.rgb(143, 132, 232),
+            Color.rgb(177, 135, 218), Color.rgb(199, 151, 210), Color.rgb(208, 174, 190)
+        )
+        val lively = intArrayOf(
+            Color.rgb(76, 220, 206), Color.rgb(92, 190, 238), Color.rgb(133, 151, 255),
+            Color.rgb(190, 127, 255), Color.rgb(241, 125, 195), Color.rgb(255, 177, 125)
+        )
+        val colors = IntArray(calm.size) { i -> blend(calm[i], lively[i], t) }
+        val stops = floatArrayOf(0f, 0.19f, 0.40f, 0.63f, 0.84f, 1f)
+        gradient = LinearGradient(0f, 0f, w, 0f, colors, stops, Shader.TileMode.CLAMP)
+        glowGradient = LinearGradient(0f, 0f, w, 0f, colors, stops, Shader.TileMode.CLAMP)
+    }
+
+    private fun blend(a: Int, b: Int, t: Float): Int {
+        val r = (Color.red(a) + (Color.red(b) - Color.red(a)) * t).toInt()
+        val g = (Color.green(a) + (Color.green(b) - Color.green(a)) * t).toInt()
+        val bl = (Color.blue(a) + (Color.blue(b) - Color.blue(a)) * t).toInt()
+        return Color.rgb(r, g, bl)
     }
 
     private fun buildWave(target: Path, points: FloatArray, baseline: Float, padding: Float) {
