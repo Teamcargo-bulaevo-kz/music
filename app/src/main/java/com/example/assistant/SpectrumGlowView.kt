@@ -7,66 +7,112 @@ import android.graphics.Paint
 import android.graphics.RectF
 import android.util.AttributeSet
 import android.view.View
-import kotlin.math.PI
-import kotlin.math.cos
+import kotlin.math.ln
 import kotlin.math.max
 import kotlin.math.min
-import kotlin.math.sin
+import kotlin.math.sqrt
 
-/** Частотный визуализатор: низкие частоты холодные, высокие — тёплые. */
+/**
+ * Живой спектр воспроизводимого аудио.
+ * Логарифмические полосы частот, быстрая атака и плавный спад — движения следуют
+ * реальным изменениям спектра, а не декоративной анимации.
+ */
 class SpectrumGlowView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
 ) : View(context, attrs) {
     private val paint = Paint(Paint.ANTI_ALIAS_FLAG)
-    private var fft: ByteArray? = null
-    private val smooth = FloatArray(48)
+    private val barCount = 64
+    private val levels = FloatArray(barCount)
+    private val peaks = FloatArray(barCount)
     private val rect = RectF()
+    @Volatile private var fft: ByteArray? = null
+    private var lastFrameNanos = 0L
+    private var beatPulse = 0f
+    private var previousBass = 0f
+    private var hasSignal = false
 
     fun setFftData(data: ByteArray?) {
         fft = data?.clone()
+        hasSignal = data != null
         postInvalidateOnAnimation()
     }
 
     override fun onDraw(canvas: Canvas) {
         super.onDraw(canvas)
         val data = fft
-        val count = smooth.size
-        val gap = width * 0.009f
-        val barWidth = (width - gap * (count - 1)) / count
-        val base = height * 0.88f
-        val maxHeight = height * 0.76f
-        for (i in 0 until count) {
-            val start = if (data == null) 0 else 2 + (i * (data.size / 2 - 2) / count)
-            val end = if (data == null) 0 else min(data.size - 1, start + max(2, data.size / count))
-            var energy = 0f
-            if (data != null && start < end) {
-                for (j in start until end step 2) {
-                    val re = data[j].toInt()
-                    val im = data.getOrElse(j + 1) { 0 }.toInt()
-                    energy += kotlin.math.sqrt((re * re + im * im).toFloat())
+        val now = System.nanoTime()
+        val dt = if (lastFrameNanos == 0L) 0.016f else ((now - lastFrameNanos) / 1e9).toFloat().coerceIn(0.008f, 0.08f)
+        lastFrameNanos = now
+
+        val binCount = data?.let { it.size / 2 } ?: 0
+        var bass = 0f
+        if (data != null && binCount > 4) {
+            for (i in 0 until barCount) {
+                // Логарифмическая шкала: больше места низким частотам и читаемые верха.
+                val low = (1.0 * Math.pow((binCount - 2).toDouble(), i.toDouble() / barCount)).toInt().coerceIn(1, binCount - 2)
+                val high = (1.0 * Math.pow((binCount - 2).toDouble(), (i + 1.0) / barCount)).toInt()
+                    .coerceIn(low + 1, binCount - 1)
+                var sum = 0.0
+                for (bin in low until high) {
+                    val re = data[bin * 2].toInt()
+                    val im = data[bin * 2 + 1].toInt()
+                    sum += sqrt((re * re + im * im).toDouble())
                 }
-                energy = (energy / max(1, (end - start) / 2) / 110f).coerceIn(0f, 1f)
+                val magnitude = (sum / (high - low)).toFloat()
+                val normalized = (ln(1f + magnitude * 1.7f) / ln(1f + 180f * 1.7f)).coerceIn(0f, 1f)
+                val target = (normalized * 1.32f).coerceIn(0.015f, 1f)
+                val speed = if (target > levels[i]) 0.78f else 0.19f
+                levels[i] += (target - levels[i]) * speed
+                if (i < 9) bass += levels[i] / 9f
             }
-            val wave = (0.10f + 0.08f * (0.5 + 0.5 * sin(i * 0.52 + System.nanoTime() / 1.8e9)).toFloat())
-            val target = max(energy, if (data == null) wave else 0.025f)
-            smooth[i] += (target - smooth[i]) * 0.32f
-            val h = max(3f, maxHeight * smooth[i])
-            val x = i * (barWidth + gap)
-            val hue = when {
-                i < 12 -> 188f - i * 1.3f
-                i < 30 -> 220f + (i - 12) * 4.2f
-                else -> 296f + (i - 30) * 5.2f
-            }
-            val color = Color.HSVToColor(floatArrayOf(hue.coerceIn(0f, 355f), 0.82f, 1f))
-            paint.color = color
-            paint.alpha = 65
-            paint.setShadowLayer(12f, 0f, 0f, color)
-            rect.set(x, base - h, x + barWidth, base)
-            canvas.drawRoundRect(rect, barWidth / 2, barWidth / 2, paint)
-            paint.alpha = 255
-            paint.clearShadowLayer()
-            canvas.drawRoundRect(rect, barWidth / 2, barWidth / 2, paint)
+            val rise = (bass - previousBass).coerceAtLeast(0f)
+            beatPulse = max(beatPulse * 0.82f, (rise * 2.8f).coerceIn(0f, 1f))
+            previousBass = bass
+        } else {
+            for (i in levels.indices) levels[i] *= 0.88f
+            beatPulse *= 0.8f
         }
-        if (data == null) postInvalidateOnAnimation()
+
+        val gap = (width * 0.006f).coerceAtLeast(1f)
+        val barWidth = (width - gap * (barCount - 1)) / barCount
+        val centerY = height * 0.94f
+        val maxHeight = height * 0.88f
+        val bottomGlow = height * 0.10f
+
+        for (i in 0 until barCount) {
+            val x = i * (barWidth + gap)
+            val lowBoost = if (i < 12) beatPulse * (1f - i / 14f) * 0.30f else 0f
+            val level = (levels[i] + lowBoost).coerceIn(0.018f, 1f)
+            val h = (maxHeight * level).coerceAtLeast(height * 0.025f)
+            peaks[i] = max(level, peaks[i] - dt * 0.52f)
+            val hue = when {
+                i < 16 -> 188f + i * 2.0f
+                i < 42 -> 220f + (i - 16) * 2.4f
+                else -> 282f + (i - 42) * 3.0f
+            }.coerceIn(0f, 355f)
+            val color = Color.HSVToColor(floatArrayOf(hue, 0.76f, 1f))
+
+            paint.color = color
+            paint.alpha = 52
+            paint.setShadowLayer(18f + beatPulse * 9f, 0f, 0f, color)
+            rect.set(x, centerY - h, x + barWidth, centerY)
+            canvas.drawRoundRect(rect, barWidth, barWidth, paint)
+
+            paint.clearShadowLayer()
+            paint.alpha = 235
+            canvas.drawRoundRect(rect, barWidth, barWidth, paint)
+
+            paint.alpha = 105
+            val peakY = centerY - maxHeight * peaks[i]
+            canvas.drawRoundRect(x, peakY, x + barWidth, peakY + (height * 0.012f).coerceAtLeast(2f), barWidth, barWidth, paint)
+        }
+
+        // Едва заметная световая линия основания.
+        paint.clearShadowLayer()
+        paint.color = Color.WHITE
+        paint.alpha = (18 + beatPulse * 35).toInt()
+        canvas.drawRoundRect(0f, centerY + bottomGlow * 0.12f, width.toFloat(), centerY + bottomGlow * 0.22f, 4f, 4f, paint)
+
+        if (hasSignal) postInvalidateOnAnimation()
     }
 }
