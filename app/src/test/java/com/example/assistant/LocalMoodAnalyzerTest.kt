@@ -58,6 +58,26 @@ class LocalMoodAnalyzerTest {
         assertTrue("Regular spectral attacks should produce a BPM estimate", features.bpm > 0)
     }
 
+    @Test fun tempoEstimateAvoidsOctaveErrorsForRegularPulse() {
+        val rate = 22050
+        for (period in listOf(0.5, 0.6666667, 0.4)) {
+            val samples = FloatArray(rate * 12) { i ->
+                val time = i.toDouble() / rate
+                val phase = time % period
+                val pulse = if (phase < 0.06) 0.35 else 0.006
+                (pulse * sin(2.0 * PI * 880.0 * time)).toFloat()
+            }
+            val bpm = LocalMoodAnalyzer.extractFeatures(samples, rate).bpm
+            val expected = (60.0 / period).roundToInt()
+            assertTrue("Expected tempo near $expected BPM, got $bpm", bpm in (expected - 8)..(expected + 8))
+        }
+    }
+
+    @Test fun silentAudioDoesNotInventTempo() {
+        val features = LocalMoodAnalyzer.extractFeatures(FloatArray(22050 * 4), 22050)
+        assertEquals(0, features.bpm)
+    }
+
     @Test fun detectsTrackLevelDynamicsAcrossLongerAudio() {
         val rate = 22050
         val samples = FloatArray(rate * 8) { i ->
