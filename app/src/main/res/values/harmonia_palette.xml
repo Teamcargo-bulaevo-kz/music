@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="harmonia_bg">#080A12</color>
+    <color name="harmonia_surface">#121626</color>
+    <color name="harmonia_surface_2">#1A2033</color>
+    <color name="harmonia_text">#F4F5FF</color>
+    <color name="harmonia_muted">#9299B2</color>
+    <color name="harmonia_violet">#9B7BFF</color>
+    <color name="harmonia_cyan">#52D9E8</color>
+    <color name="harmonia_pink">#F18ACB</color>
+    <color name="harmonia_stroke">#30364D</color>
+</resources>
