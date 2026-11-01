@@ -1,6 +1,8 @@
 package com.example.assistant
 
+import android.Manifest
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -30,6 +32,13 @@ class PlayerActivity : AppCompatActivity() {
     private var userSeeking = false
     private var shownTrackId = -1L
     private var visualizer: Visualizer? = null
+    private var visualizerBlocked = false
+    private val audioPermission = registerForActivityResult(
+        androidx.activity.result.contract.ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        visualizerBlocked = !granted
+        if (granted) attachVisualizer() else spectrum.setFftData(null)
+    }
     private lateinit var spectrum: SpectrumGlowView
 
     private lateinit var cover: ImageView
@@ -103,7 +112,11 @@ class PlayerActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         shownTrackId = -1L // характеристики могли поменять в редакторе
-        attachVisualizer()
+        if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+            attachVisualizer()
+        } else {
+            audioPermission.launch(Manifest.permission.RECORD_AUDIO)
+        }
         handler.post(ticker)
     }
 
@@ -115,6 +128,7 @@ class PlayerActivity : AppCompatActivity() {
 
     private fun attachVisualizer() {
         detachVisualizer()
+        if (visualizerBlocked || ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED) return
         val sessionId = MusicService.instance?.audioSessionId ?: 0
         if (sessionId <= 0) return
         try {
@@ -132,10 +146,11 @@ class PlayerActivity : AppCompatActivity() {
                 enabled = true
             }
         } catch (_: Exception) {
-            // На отдельных прошивках захват аудиосессии запрещён: плеер продолжает работать без визуализатора.
+            // Отдельные прошивки запрещают захват сессии; сам плеер продолжает работать.
             spectrum.setFftData(null)
             visualizer?.release()
             visualizer = null
+            visualizerBlocked = true
         }
     }
 
@@ -153,6 +168,10 @@ class PlayerActivity : AppCompatActivity() {
         }
         if (track.id != shownTrackId) {
             shownTrackId = track.id
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+                visualizerBlocked = false
+                attachVisualizer()
+            }
             title.text = track.title
             artist.text = track.artist.ifBlank { "Неизвестный исполнитель" }
             CoverLoader.load(lifecycleScope, this, track, cover, 800)
