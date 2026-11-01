@@ -177,7 +177,11 @@ class PlayerActivity : AppCompatActivity() {
             CoverLoader.load(lifecycleScope, this, track, cover, 800)
             val tg = MusicTags.get(this, track)
             tags.text = tg?.takeIf { MusicTags.isTagged(it) }?.let {
-                "${it.moods.joinToString(", ") { m -> MusicTags.moodShort[m] ?: m }} · ${it.genreText} · энергия ${it.energy}/5"
+                val mood = it.moodScores.entries.sortedByDescending { entry -> entry.value }.take(2)
+                    .joinToString(" · ") { entry -> "${MusicTags.moodShort[entry.key] ?: entry.key} ${entry.value}%" }
+                val rhythm = if (it.bpm > 0) "${it.bpm} BPM" else "ритм не определён"
+                val dance = if (it.danceability > 0) " · танцевальность ${it.danceability}%" else ""
+                "$mood\n$rhythm · энергия ${it.energy * 20}%$dance · точность оценки ${it.confidence}%"
             }.orEmpty()
         }
         showRating(MusicTags.likedOf(this, track))
