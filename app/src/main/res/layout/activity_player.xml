@@ -30,6 +30,10 @@
         android:id="@+id/tags" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:layout_marginTop="6dp" android:gravity="center" android:textColor="@color/harmonia_cyan" android:textSize="13sp" />
 
+    <com.example.assistant.MoodProfileView
+        android:id="@+id/moodProfile" android:layout_width="match_parent" android:layout_height="92dp"
+        android:layout_marginTop="4dp" android:visibility="gone" />
+
     <SeekBar
         android:id="@+id/seek" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:layout_marginTop="14dp" android:progressTint="@color/harmonia_cyan" android:thumbTint="@color/harmonia_cyan" />
