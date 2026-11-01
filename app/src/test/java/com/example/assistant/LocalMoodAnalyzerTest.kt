@@ -5,6 +5,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Test
 import kotlin.math.PI
 import kotlin.math.sin
+import kotlin.math.roundToInt
 
 class LocalMoodAnalyzerTest {
     @Test fun moodScoresAlwaysTotalOneHundred() {
