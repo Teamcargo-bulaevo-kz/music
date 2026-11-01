@@ -60,7 +60,7 @@ async function analyze(tracks) {
   if (!GROQ_API_KEY) throw new Error("SERVER_GROQ_KEY_MISSING");
   const prompt = [
     "Ты музыкальный исследователь. Используй browser_search для поиска сведений о каждой композиции.",
-    "Сопоставляй по названию, исполнителю и альбому. Не выдумывай факты; если совпадение сомнительно, confidence должен быть ниже 55.",
+    "Сопоставляй по названию, исполнителю, альбому и длительности. Длительность — дополнительный сигнал совпадения. Не выдумывай факты; если совпадение сомнительно, confidence должен быть ниже 55.",
     "Верни только JSON-объект вида { results: [...] }, без Markdown.",
     "Для каждого входного key верни key, genre (ключ: pop, rock, hiphop, electronic, classical, jazz, chanson, folk, metal, rnb, indie, country, soundtrack, reggae, blues, other), genreLabel, mood (один из ключей), energy (1..5), confidence (0..100), moodScores (все девять ключей, сумма около 100), description, tempo, sources (URL или названия найденных источников).",
     "moodScores — относительное распределение выраженности девяти настроений, не вероятности.",
@@ -105,7 +105,7 @@ const server = http.createServer(async (req, res) => {
       key: String(t.key || "").slice(0, 160),
       title: String(t.title || "").slice(0, 180),
       artist: String(t.artist || "").slice(0, 180),
-      album: String(t.album || "").slice(0, 180)
+      album: String(t.album || "").slice(0, 180),\n      durationMs: Math.max(0, Math.min(86400000, Number(t.durationMs) || 0))
     }));
     if (tracks.some(t => !t.key || !t.title)) return json(res, 400, { error: "TRACK_KEY_AND_TITLE_REQUIRED" });
     return json(res, 200, await analyze(tracks));
