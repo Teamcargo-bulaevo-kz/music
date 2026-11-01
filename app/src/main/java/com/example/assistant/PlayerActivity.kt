@@ -40,6 +40,7 @@ class PlayerActivity : AppCompatActivity() {
         if (granted) attachVisualizer() else spectrum.setFftData(null)
     }
     private lateinit var spectrum: SpectrumGlowView
+    private lateinit var moodProfile: MoodProfileView
 
     private lateinit var cover: ImageView
     private lateinit var title: TextView
@@ -65,6 +66,7 @@ class PlayerActivity : AppCompatActivity() {
         super.onCreate(savedInstanceState)
         setContentView(R.layout.activity_player)
         spectrum = findViewById(R.id.spectrum)
+        moodProfile = findViewById(R.id.moodProfile)
         cover = findViewById(R.id.cover)
         title = findViewById(R.id.title)
         artist = findViewById(R.id.artist)
@@ -176,7 +178,10 @@ class PlayerActivity : AppCompatActivity() {
             artist.text = track.artist.ifBlank { "Неизвестный исполнитель" }
             CoverLoader.load(lifecycleScope, this, track, cover, 800)
             val tg = MusicTags.get(this, track)
-            tags.text = tg?.takeIf { MusicTags.isTagged(it) }?.let {
+            val tagged = tg?.takeIf { MusicTags.isTagged(it) }
+            moodProfile.setScores(tagged?.moodScores.orEmpty())
+            moodProfile.visibility = if (tagged?.moodScores?.isNotEmpty() == true) View.VISIBLE else View.GONE
+            tags.text = tagged?.let {
                 val mood = it.moodScores.entries.sortedByDescending { entry -> entry.value }.take(2)
                     .joinToString(" · ") { entry -> "${MusicTags.moodShort[entry.key] ?: entry.key} ${entry.value}%" }
                 val rhythm = if (it.bpm > 0) "${it.bpm} BPM" else "ритм не определён"
