@@ -258,13 +258,16 @@ class MusicService : Service() {
     }
 
     private fun resume() {
-        val current = player
-        if (current == null) {
-            if (queue.isNotEmpty()) playCurrent()
+        // Воспроизведение разрешено только после явного ACTION_PLAY.
+        // Системный MediaSession/кнопка Resume не должны создавать новый трек
+        // или запускать случайную очередь после пересоздания службы.
+        val current = player ?: return
+        if (!prepared) {
+            wantPlay = true
             return
         }
-        wantPlay = true
-        if (prepared && !current.isPlaying) {
+        if (!current.isPlaying) {
+            wantPlay = true
             requestFocus()
             current.start()
         }
