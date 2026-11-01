@@ -45,10 +45,22 @@
         android:background="@drawable/banner_bg" android:padding="12dp"
         android:textColor="@color/harmonia_muted" android:textSize="13sp" android:visibility="gone" />
 
-    <androidx.recyclerview.widget.RecyclerView
-        android:id="@+id/list" android:layout_width="match_parent" android:layout_height="0dp"
-        android:layout_marginTop="6dp" android:layout_weight="1" android:clipToPadding="false"
-        android:paddingStart="2dp" android:paddingTop="4dp" android:paddingEnd="2dp" android:paddingBottom="12dp" />
+    <FrameLayout
+        android:layout_width="match_parent" android:layout_height="0dp"
+        android:layout_weight="1">
+
+        <androidx.recyclerview.widget.RecyclerView
+            android:id="@+id/list" android:layout_width="match_parent" android:layout_height="match_parent"
+            android:clipToPadding="false"
+            android:paddingStart="2dp" android:paddingTop="8dp" android:paddingEnd="2dp" android:paddingBottom="12dp" />
+
+        <TextView
+            android:id="@+id/loadingHint" android:layout_width="wrap_content" android:layout_height="wrap_content"
+            android:layout_gravity="center" android:gravity="center"
+            android:text="Загружаю музыку…"
+            android:textColor="@color/harmonia_muted" android:textSize="15sp"
+            android:visibility="gone" />
+    </FrameLayout>
 
     <LinearLayout
         android:id="@+id/miniPlayer" android:layout_width="match_parent" android:layout_height="wrap_content"
