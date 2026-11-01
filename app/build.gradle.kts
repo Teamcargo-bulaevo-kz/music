@@ -9,11 +9,11 @@ android {
     compileSdk = 34
 
     defaultConfig {
-        applicationId = "com.teamcargo.music"
+        applicationId = "com.teamcargo.harmonia"
         minSdk = 26
         targetSdk = 34
-        versionCode = 38
-        versionName = "1.38"
+        versionCode = 39
+        versionName = "1.39"
         // Только телефонные процессоры: без x86 приложение заметно легче
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         // Метка сборки видна в приложении: ветка и короткий номер коммита (в CI берутся из GitHub)
