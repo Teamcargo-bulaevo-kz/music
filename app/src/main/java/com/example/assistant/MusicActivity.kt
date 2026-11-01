@@ -237,6 +237,7 @@ class MusicActivity : AppCompatActivity() {
         menu.menu.add(0, 6, 5, "Выбрать файл с разметкой…")
         menu.menu.add(0, 7, 6, "Разметить заново (правки сохранятся)")
         menu.menu.add(0, 8, 7, "Повторить неопознанные")
+        menu.menu.add(0, 9, 8, "Умные подборки")
         menu.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> chooseSort()
@@ -249,6 +250,7 @@ class MusicActivity : AppCompatActivity() {
                     .setPositiveButton("Разметить") { _, _ -> runInBackground { MusicTagger.start(this, MusicTagger.Mode.REDO) } }
                     .setNegativeButton("Отмена", null).show()
                 8 -> runInBackground { MusicTagger.start(this, MusicTagger.Mode.RETRY) }
+                9 -> showSmartPlaylists()
                 5 -> runInBackground {
                     if (MusicCatalog.exportNow(this)) "Таблица обновлена: Assistant/${MusicCatalog.FILE_NAME}"
                     else "Нет доступа к папке Assistant. Разреши доступ ко всем файлам."
@@ -259,6 +261,32 @@ class MusicActivity : AppCompatActivity() {
         menu.show()
     }
 
+    /** Подборки строятся из рассчитанных признаков; анализ и запуск музыки не вызываются. */
+    private fun showSmartPlaylists() {
+        val presets: List<Pair<String, (TrackTags) -> Boolean>> = listOf(
+            "Спокойствие · вечер" to { t -> (t.moods.any { it in setOf("calm", "romantic") } || (t.moodScores["calm"] ?: 0) >= 18) && t.energy <= 3 && (t.bpm == 0 || t.bpm <= 110) },
+            "Фокус · работа" to { t -> (t.moods.contains("focus") || (t.moodScores["focus"] ?: 0) >= 18) && t.energy <= 3 && (t.bpm == 0 || t.bpm <= 125) },
+            "Заряд · тренировка" to { t -> (t.moods.any { it in setOf("energetic", "epic") } || (t.moodScores["energetic"] ?: 0) >= 18) && t.energy >= 3 && (t.bpm == 0 || t.bpm >= 105) },
+            "Танцевальный ритм" to { t -> (t.moods.contains("dance") || (t.moodScores["dance"] ?: 0) >= 18) && t.danceability >= 45 && (t.bpm == 0 || t.bpm in 95..160) },
+            "Светлое настроение" to { t -> (t.moods.contains("happy") || (t.moodScores["happy"] ?: 0) >= 18) && t.valence >= 55 && t.energy >= 2 },
+            "Мягкая энергия" to { t -> t.energy in 2..3 && t.tension <= 55 && (t.moodScores["calm"] ?: 0) >= 10 && (t.moodScores["energetic"] ?: 0) >= 10 }
+        )
+        val available = presets.map { (name, predicate) ->
+            name to allTracks.filter { track ->
+                val tags = MusicTags.get(this, track)
+                tags != null && MusicTags.isTagged(tags) && tags.liked >= 0 && predicate(tags)
+            }
+        }.filter { it.second.isNotEmpty() }
+        if (available.isEmpty()) {
+            Toast.makeText(this, "Пока недостаточно размеченных песен для подборок", Toast.LENGTH_LONG).show()
+            return
+        }
+        AlertDialog.Builder(this).setTitle("Умные подборки")
+            .setItems(available.map { it.first + " · " + it.second.size }.toTypedArray()) { _, which ->
+                val (name, tracks) = available[which]
+                openGroup(name, tracks)
+            }.setNegativeButton("Закрыть", null).show()
+    }
     /** Выполняет блокирующее действие в фоне и показывает его результат. */
     private fun runInBackground(action: () -> String) {
         lifecycleScope.launch {
