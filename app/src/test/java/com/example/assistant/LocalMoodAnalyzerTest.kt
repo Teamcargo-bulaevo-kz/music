@@ -73,4 +73,19 @@ class LocalMoodAnalyzerTest {
         assertTrue(result.tension in 0..100)
         assertTrue(result.danceability in 0..100)
     }
+    @Test fun overlappingSegmentsAreWeightedByUniqueTimelineCoverage() {
+        val segments = listOf(
+            MoodSegment(0, 20, "calm", 50, 20, 10, mapOf("calm" to 100)),
+            MoodSegment(10, 30, "energetic", 50, 70, 30, mapOf("energetic" to 100)),
+            MoodSegment(20, 40, "energetic", 50, 70, 30, mapOf("energetic" to 100)),
+            MoodSegment(30, 45, "calm", 50, 20, 10, mapOf("calm" to 100))
+        )
+        val weights = LocalMoodAnalyzer.segmentWeights(segments, 45)
+        assertEquals(4, weights.size)
+        assertEquals(45.0, weights.sum(), 0.0001)
+        assertTrue(weights.all { it > 0.0 })
+        // Перекрытые секунды не должны учитываться повторно.
+        assertEquals(listOf(15.0, 10.0, 8.75, 11.25), weights)
+    }
+
 }
