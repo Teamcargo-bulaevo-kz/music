@@ -85,7 +85,8 @@ class MusicActivity : AppCompatActivity() {
     private lateinit var tabs: TabLayout
     private lateinit var search: EditText
     private lateinit var status: TextView
-    private lateinit var screenTitle: TextView
+    private lateinit var loadingHint: TextView
+    private lateinit var screenTitle
     private lateinit var mini: LinearLayout
     private lateinit var miniProgress: ProgressBar
     private lateinit var miniTitle: TextView
@@ -111,6 +112,7 @@ class MusicActivity : AppCompatActivity() {
         tabs = findViewById(R.id.tabs)
         search = findViewById(R.id.search)
         status = findViewById(R.id.status)
+        loadingHint = findViewById(R.id.loadingHint)
         screenTitle = findViewById(R.id.screenTitle)
         mini = findViewById(R.id.miniPlayer)
         miniProgress = findViewById(R.id.miniProgress)
@@ -200,10 +202,13 @@ class MusicActivity : AppCompatActivity() {
     }
 
     private fun loadLibrary() {
+        loadingHint.visibility = View.VISIBLE
+        loadingHint.text = "Загружаю музыку…"
         lifecycleScope.launch {
             allTracks = withContext(Dispatchers.IO) {
                 MusicLibrary.index(this@MusicActivity, force = true).allMusic()
             }
+            loadingHint.visibility = View.GONE
             rebuild()
             // Первый запуск и переустановка: сам подхватит таблицу и начнёт разметку того, что осталось
             MusicTagger.autoStart(this@MusicActivity)
