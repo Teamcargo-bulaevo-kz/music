@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
+import android.graphics.Color
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
@@ -425,6 +426,9 @@ class MusicService : Service() {
         )
         val builder = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
+            .setColor(Color.rgb(82, 190, 210))
+            .setCategory(Notification.CATEGORY_TRANSPORT)
+            .setPriority(Notification.PRIORITY_LOW)
             .setContentTitle(track?.title ?: "Музыка")
             .setContentText(track?.artist.orEmpty())
             .setContentIntent(open)
