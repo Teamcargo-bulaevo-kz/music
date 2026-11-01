@@ -18,7 +18,8 @@ data class MusicTrack(
     val artist: String,
     val album: String = "",
     val isMusic: Boolean = true,
-    val dateAdded: Long = 0
+    val dateAdded: Long = 0,
+    val durationMs: Long = 0
 ) {
     val uri: Uri
         get() = ContentUris.withAppendedId(MediaStore.Audio.Media.EXTERNAL_CONTENT_URI, id)
@@ -62,7 +63,8 @@ object MusicLibrary {
             MediaStore.Audio.Media.ARTIST,
             MediaStore.Audio.Media.ALBUM,
             MediaStore.Audio.Media.IS_MUSIC,
-            MediaStore.Audio.Media.DATE_ADDED
+            MediaStore.Audio.Media.DATE_ADDED,
+            MediaStore.Audio.Media.DURATION
         )
         // Музыка, а также любое длинное аудио (альбомы без тегов, скачанное из мессенджеров).
         // Рингтоны, будильники и уведомления не берём.
@@ -82,6 +84,7 @@ object MusicLibrary {
                 val albumCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.ALBUM)
                 val musicCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.IS_MUSIC)
                 val addedCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DATE_ADDED)
+                val durationCol = cursor.getColumnIndexOrThrow(MediaStore.Audio.Media.DURATION)
                 while (cursor.moveToNext()) {
                     val artist = cursor.getString(artistCol).orEmpty()
                     result += MusicTrack(
@@ -90,7 +93,8 @@ object MusicLibrary {
                         artist = if (artist == "<unknown>") "" else artist,
                         album = cursor.getString(albumCol).orEmpty(),
                         isMusic = cursor.getInt(musicCol) != 0,
-                        dateAdded = cursor.getLong(addedCol)
+                        dateAdded = cursor.getLong(addedCol),
+                        durationMs = cursor.getLong(durationCol).coerceAtLeast(0)
                     )
                 }
             }
