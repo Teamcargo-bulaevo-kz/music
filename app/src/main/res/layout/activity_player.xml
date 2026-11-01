@@ -32,16 +32,16 @@
 
     <SeekBar
         android:id="@+id/seek" android:layout_width="match_parent" android:layout_height="wrap_content"
-        android:layout_marginTop="14dp" android:progressTint="@color/music_accent" android:thumbTint="@color/music_accent" />
+        android:layout_marginTop="14dp" android:progressTint="@color/harmonia_cyan" android:thumbTint="@color/harmonia_cyan" />
     <LinearLayout
         android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal"
         android:paddingStart="4dp" android:paddingEnd="4dp">
         <TextView
             android:id="@+id/timeNow" android:layout_width="0dp" android:layout_height="wrap_content"
-            android:layout_weight="1" android:textColor="@color/music_text_dim" android:textSize="12sp" />
+            android:layout_weight="1" android:textColor="@color/harmonia_muted" android:textSize="12sp" />
         <TextView
             android:id="@+id/timeTotal" android:layout_width="wrap_content" android:layout_height="wrap_content"
-            android:textColor="@color/music_text_dim" android:textSize="12sp" />
+            android:textColor="@color/harmonia_muted" android:textSize="12sp" />
     </LinearLayout>
 
     <LinearLayout
