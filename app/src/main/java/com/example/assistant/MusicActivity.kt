@@ -365,7 +365,25 @@ class MusicActivity : AppCompatActivity() {
                     val moodName = if (moodIndex == 0) "любое настроение" else MusicTags.moods[mood].orEmpty()
                     val title = "Своя: $moodName · энергия от $minimumEnergy" +
                         if (low > 0 || high > 0) " · ${low.takeIf { it > 0 } ?: 40}–${high.takeIf { it > 0 } ?: 240} BPM" else ""
-                    openGroup(title, selected)
+                    AlertDialog.Builder(this)
+                        .setTitle("Найдено песен: ${selected.size}")
+                        .setMessage("Открыть подборку или сохранить её в папки?")
+                        .setPositiveButton("Открыть") { _, _ -> openGroup(title, selected) }
+                        .setNeutralButton("Сохранить") { _, _ ->
+                            askFolderName("Сохранить подборку", title) { name ->
+                                val lists = PlaylistStore.load(this)
+                                val key = PlaylistStore.findName(lists, name) ?: name
+                                val folder = lists.getOrPut(key) { mutableListOf() }
+                                selected.forEach { track ->
+                                    if (folder.none { it.id == track.id }) folder.add(track)
+                                }
+                                PlaylistStore.save(this, lists)
+                                MusicCatalog.scheduleExport(this)
+                                openGroup(key, selected, folder = key)
+                                Toast.makeText(this, "Сохранено песен: ${selected.size}", Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                        .setNegativeButton("Отмена", null).show()
                 }
             }.setNegativeButton("Отмена", null).show()
     }
