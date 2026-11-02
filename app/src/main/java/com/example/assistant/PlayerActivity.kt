@@ -179,8 +179,22 @@ class PlayerActivity : AppCompatActivity() {
                 visualizerBlocked = false
                 attachVisualizer()
             }
+            title.animate().cancel()
+            artist.animate().cancel()
+            cover.animate().cancel()
+            title.alpha = 0f
+            artist.alpha = 0f
+            title.translationY = 8f
+            artist.translationY = 5f
+            cover.alpha = 0.72f
+            cover.scaleX = 0.97f
+            cover.scaleY = 0.97f
             title.text = track.title
             artist.text = track.artist.ifBlank { "Неизвестный исполнитель" }
+            title.animate().alpha(1f).translationY(0f).setDuration(240).start()
+            artist.animate().alpha(1f).translationY(0f).setDuration(300).start()
+            cover.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(360)
+                .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
             CoverLoader.load(lifecycleScope, this, track, cover, 800)
             val tg = MusicTags.get(this, track)
             val tagged = tg?.takeIf { MusicTags.isTagged(it) }
