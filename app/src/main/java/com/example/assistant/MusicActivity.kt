@@ -12,6 +12,7 @@ import android.os.Looper
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import android.view.animation.AnimationUtils
 import android.widget.EditText
 import android.widget.ImageButton
 import android.widget.ImageView
@@ -132,6 +133,13 @@ class MusicActivity : AppCompatActivity() {
         }
 
         list.layoutManager = LinearLayoutManager(this)
+        list.layoutAnimation = AnimationUtils.loadLayoutAnimation(this, R.anim.music_list_enter)
+        list.itemAnimator = androidx.recyclerview.widget.DefaultItemAnimator().apply {
+            addDuration = 190
+            removeDuration = 150
+            moveDuration = 190
+            changeDuration = 140
+        }
         list.adapter = adapter
         tabNames.forEach { tabs.addTab(tabs.newTab().setText(it)) }
         tabs.addOnTabSelectedListener(object : TabLayout.OnTabSelectedListener {
