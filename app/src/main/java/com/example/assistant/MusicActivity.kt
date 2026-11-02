@@ -280,15 +280,16 @@ class MusicActivity : AppCompatActivity() {
                 tags != null && MusicTags.isTagged(tags) && tags.liked >= 0 && predicate(tags)
             }
         }.filter { it.second.isNotEmpty() }
-        if (available.isEmpty()) {
-            Toast.makeText(this, "Пока недостаточно размеченных песен для подборок", Toast.LENGTH_LONG).show()
-            return
-        }
-        AlertDialog.Builder(this).setTitle("Умные подборки")
-            .setItems(available.map { it.first + " · " + it.second.size }.toTypedArray()) { _, which ->
+        val dialog = AlertDialog.Builder(this).setTitle("Умные подборки")
+        if (available.isNotEmpty()) {
+            dialog.setItems(available.map { it.first + " · " + it.second.size }.toTypedArray()) { _, which ->
                 val (name, tracks) = available[which]
                 openGroup(name, tracks)
-            }.setNeutralButton("Своя подборка") { _, _ -> showCustomPlaylist() }
+            }
+        } else {
+            dialog.setMessage("Готовые подборки пока пусты. Можно задать свои условия.")
+        }
+        dialog.setNeutralButton("Своя подборка") { _, _ -> showCustomPlaylist() }
             .setNegativeButton("Закрыть", null).show()
     }
 
