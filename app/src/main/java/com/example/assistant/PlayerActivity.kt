@@ -88,16 +88,16 @@ class PlayerActivity : AppCompatActivity() {
                 cover.layoutParams = lp
             }
         }
-        play.setOnClickListener { MusicService.instance?.togglePlay() }
-        findViewById<ImageButton>(R.id.next).setOnClickListener { MusicService.instance?.skipNext() }
-        findViewById<ImageButton>(R.id.prev).setOnClickListener { MusicService.instance?.skipPrevious() }
-        shuffle.setOnClickListener { MusicService.instance?.toggleShuffle() }
-        repeat.setOnClickListener { MusicService.instance?.cycleRepeat() }
+        play.setOnClickListener { pulse(it); MusicService.instance?.togglePlay() }
+        findViewById<ImageButton>(R.id.next).setOnClickListener { pulse(it); MusicService.instance?.skipNext() }
+        findViewById<ImageButton>(R.id.prev).setOnClickListener { pulse(it); MusicService.instance?.skipPrevious() }
+        shuffle.setOnClickListener { pulse(it); MusicService.instance?.toggleShuffle() }
+        repeat.setOnClickListener { pulse(it); MusicService.instance?.cycleRepeat() }
         likeButton = findViewById(R.id.likeButton)
         dislikeButton = findViewById(R.id.dislikeButton)
-        likeButton.setOnClickListener { rate(1) }
-        dislikeButton.setOnClickListener { rate(-1) }
-        findViewById<ImageButton>(R.id.moreButton).setOnClickListener { showMore(it) }
+        likeButton.setOnClickListener { pulse(it); rate(1) }
+        dislikeButton.setOnClickListener { pulse(it); rate(-1) }
+        findViewById<ImageButton>(R.id.moreButton).setOnClickListener { pulse(it); showMore(it) }
 
         seek.setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
             override fun onProgressChanged(bar: SeekBar, progress: Int, fromUser: Boolean) {
@@ -224,6 +224,17 @@ class PlayerActivity : AppCompatActivity() {
             timeNow.text = PlayerState.formatTime(PlayerState.position())
         }
         timeTotal.text = PlayerState.formatTime(duration)
+    }
+
+    private fun pulse(view: View) {
+        view.animate().cancel()
+        view.scaleX = 1f
+        view.scaleY = 1f
+        view.animate().scaleX(0.88f).scaleY(0.88f).setDuration(75)
+            .withEndAction {
+                view.animate().scaleX(1f).scaleY(1f).setDuration(150)
+                    .setInterpolator(android.view.animation.OvershootInterpolator(2.2f)).start()
+            }.start()
     }
 
     /** Нажатие на ♥ или 👎: повторное нажатие снимает оценку. */
