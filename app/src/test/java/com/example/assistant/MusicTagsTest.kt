@@ -20,7 +20,9 @@ class MusicTagsTest {
 
     @Test fun customPlaylistFilterHandlesUnknownTempoAndInvalidRanges() {
         val tags = TrackTags("other", "calm", 2, bpm = 0)
-        assertTrue(MusicTags.matchesPlaylistFilter(tags, null, 2, 100, 140))
+        assertFalse(MusicTags.matchesPlaylistFilter(tags, null, 2, 100, 140))
+        assertTrue(MusicTags.matchesPlaylistFilter(tags, null, 2))
+        assertTrue(MusicTags.matchesPlaylistFilter(tags.copy(bpm = 120), null, 2, 100, 140))
         assertFalse(MusicTags.matchesPlaylistFilter(tags, null, 2, 150, 100))
         assertFalse(MusicTags.matchesPlaylistFilter(tags, null, 0, 0, 0))
         assertFalse(MusicTags.matchesPlaylistFilter(tags, null, 2, 0, 241))
