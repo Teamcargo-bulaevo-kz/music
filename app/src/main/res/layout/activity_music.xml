@@ -16,11 +16,11 @@
             android:textSize="30sp" android:textStyle="bold" />
         <ImageButton
             android:id="@+id/shuffleAll" android:layout_width="48dp" android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Вперемешку"
+            android:background="@drawable/harmonia_icon_button" android:contentDescription="Вперемешку"
             android:padding="12dp" android:scaleType="fitCenter" android:src="@drawable/ic_shuffle" android:tint="@color/harmonia_cyan" />
         <ImageButton
             android:id="@+id/moreButton" android:layout_width="48dp" android:layout_height="48dp"
-            android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Ещё"
+            android:background="@drawable/harmonia_icon_button" android:contentDescription="Ещё"
             android:padding="12dp" android:scaleType="fitCenter" android:src="@drawable/ic_more" android:tint="@color/harmonia_text" />
     </LinearLayout>
 
@@ -52,7 +52,7 @@
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/list" android:layout_width="match_parent" android:layout_height="match_parent"
-            android:clipToPadding="false"
+            android:layoutAnimation="@anim/music_list_enter" android:clipToPadding="false"
             android:paddingStart="2dp" android:paddingTop="8dp" android:paddingEnd="2dp" android:paddingBottom="12dp" />
 
         <TextView
