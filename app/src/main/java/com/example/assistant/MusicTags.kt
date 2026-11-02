@@ -78,7 +78,9 @@ object MusicTags {
         if (minimumBpm > 0 && maximumBpm > 0 && minimumBpm > maximumBpm) return false
         val moodMatches = mood.isNullOrBlank() ||
             mood in tags.moods || (tags.moodScores[mood] ?: 0) >= 10
-        val bpmMatches = tags.bpm == 0 ||
+        val hasTempoFilter = minimumBpm > 0 || maximumBpm > 0
+        // Неизвестный BPM нельзя считать подходящим, если пользователь задал диапазон.
+        val bpmMatches = if (!hasTempoFilter) true else tags.bpm > 0 &&
             (minimumBpm == 0 || tags.bpm >= minimumBpm) &&
             (maximumBpm == 0 || tags.bpm <= maximumBpm)
         return moodMatches && tags.energy >= minimumEnergy && bpmMatches
