@@ -122,6 +122,11 @@ class PlayerActivity : AppCompatActivity() {
         handler.post(ticker)
     }
 
+    override fun finish() {
+        super.finish()
+        overridePendingTransition(R.anim.player_pop_enter, R.anim.player_pop_exit)
+    }
+
     override fun onPause() {
         handler.removeCallbacks(ticker)
         detachVisualizer()
