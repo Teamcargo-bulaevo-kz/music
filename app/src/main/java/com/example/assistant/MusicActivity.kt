@@ -605,7 +605,10 @@ class MusicActivity : AppCompatActivity() {
     }
 
     private fun openPlayer() {
-        if (PlayerState.track != null || MusicService.isRunning) startActivity(Intent(this, PlayerActivity::class.java))
+        if (PlayerState.track != null || MusicService.isRunning) {
+            startActivity(Intent(this, PlayerActivity::class.java))
+            overridePendingTransition(R.anim.player_enter, R.anim.player_exit)
+        }
     }
 
     private fun openEditor(track: MusicTrack, review: Boolean = false) {
