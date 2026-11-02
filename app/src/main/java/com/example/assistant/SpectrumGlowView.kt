@@ -16,7 +16,8 @@ import kotlin.math.sqrt
 
 /**
  * Harmonia: единая текучая световая волна вместо набора столбцов.
- * Частотные составляющие перемешаны и мягко смешиваются между собой.
+ * Частоты идут слева направо: глубокий бас — тёмный, верх — светлый.
+ * Форма спектра остаётся цельной и плавной.
  */
 class SpectrumGlowView @JvmOverloads constructor(
     context: Context, attrs: AttributeSet? = null
@@ -64,10 +65,10 @@ class SpectrumGlowView @JvmOverloads constructor(
         if (data != null && bins > 8) {
             val usable = (bins - 2).coerceAtLeast(2)
             for (i in 0 until pointCount) {
-                // Детерминированное перемешивание диапазонов, без резкого порядка слева направо.
-                val shuffled = (i * 23 + 7) % pointCount
-                val position = (shuffled + 0.5f) / pointCount
-                val bin = (1 + position * usable * position).toInt().coerceIn(1, bins - 2)
+                // Логарифмическая шкала: бас получает больше места, верхние частоты не сжимаются.
+                val position = (i + 0.5f) / pointCount
+                val maxBin = (bins - 2).toFloat()
+                val bin = exp(ln(maxBin) * position).toInt().coerceIn(1, bins - 2)
                 var magnitude = 0.0
                 for (offset in -1..1) {
                     val b = (bin + offset).coerceIn(1, bins - 2)
@@ -123,7 +124,7 @@ class SpectrumGlowView @JvmOverloads constructor(
         buildWave(glowPath, points, base, h * 0.045f)
         paint.shader = glowGradient
         paint.style = Paint.Style.FILL
-        paint.alpha = 42
+        paint.alpha = 58
         paint.setShadowLayer(h * 0.12f, 0f, 0f, Color.rgb(151, 116, 255))
         canvas.drawPath(glowPath, paint)
 
@@ -131,16 +132,16 @@ class SpectrumGlowView @JvmOverloads constructor(
         buildWave(path, points, base, h * 0.012f)
         paint.clearShadowLayer()
         paint.shader = gradient
-        paint.alpha = 105
+        paint.alpha = 118
         canvas.drawPath(path, paint)
 
         // Тонкая световая сердцевина повторяет волну, но не дробит её на сегменты.
         paint.style = Paint.Style.STROKE
-        paint.strokeWidth = (h * 0.012f).coerceAtLeast(2f)
+        paint.strokeWidth = (h * 0.009f).coerceAtLeast(1.8f)
         paint.strokeCap = Paint.Cap.ROUND
         paint.strokeJoin = Paint.Join.ROUND
-        paint.alpha = 175
-        paint.setShadowLayer(h * 0.045f, 0f, 0f, Color.rgb(190, 142, 255))
+        paint.alpha = 215
+        paint.setShadowLayer(h * 0.045f, 0f, 0f, Color.rgb(139, 205, 255))
         val line = Path()
         for (i in 0 until pointCount) {
             val x = points[i * 2]
@@ -169,16 +170,17 @@ class SpectrumGlowView @JvmOverloads constructor(
         if (!force && step == paletteStep) return
         paletteStep = step
         val t = step / 32f
+        // Цвет привязан к частоте: тёмный бас, насыщенная середина, светлый верх.
         val calm = intArrayOf(
-            Color.rgb(76, 190, 218), Color.rgb(105, 151, 235), Color.rgb(143, 132, 232),
-            Color.rgb(177, 135, 218), Color.rgb(199, 151, 210), Color.rgb(208, 174, 190)
+            Color.rgb(24, 35, 82), Color.rgb(104, 35, 75), Color.rgb(105, 57, 145),
+            Color.rgb(52, 112, 178), Color.rgb(67, 177, 190), Color.rgb(205, 232, 238)
         )
         val lively = intArrayOf(
-            Color.rgb(76, 220, 206), Color.rgb(92, 190, 238), Color.rgb(133, 151, 255),
-            Color.rgb(190, 127, 255), Color.rgb(241, 125, 195), Color.rgb(255, 177, 125)
+            Color.rgb(42, 25, 88), Color.rgb(151, 39, 77), Color.rgb(151, 67, 183),
+            Color.rgb(58, 145, 218), Color.rgb(82, 218, 205), Color.rgb(255, 241, 207)
         )
         val colors = IntArray(calm.size) { i -> blend(calm[i], lively[i], t) }
-        val stops = floatArrayOf(0f, 0.19f, 0.40f, 0.63f, 0.84f, 1f)
+        val stops = floatArrayOf(0f, 0.16f, 0.38f, 0.61f, 0.83f, 1f)
         gradient = LinearGradient(0f, 0f, w, 0f, colors, stops, Shader.TileMode.CLAMP)
         glowGradient = LinearGradient(0f, 0f, w, 0f, colors, stops, Shader.TileMode.CLAMP)
     }
