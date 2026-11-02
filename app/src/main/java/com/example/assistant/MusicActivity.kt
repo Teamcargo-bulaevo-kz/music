@@ -626,11 +626,22 @@ class MusicActivity : AppCompatActivity() {
             if (lastMiniId != -1L) { lastMiniId = -1L; adapter.notifyDataSetChanged() }
             return
         }
-        mini.visibility = View.VISIBLE
+        if (mini.visibility != View.VISIBLE) {
+            mini.visibility = View.VISIBLE
+            mini.alpha = 0f
+            mini.translationY = mini.height.coerceAtLeast(24).toFloat() * 0.25f
+            mini.animate().alpha(1f).translationY(0f).setDuration(240)
+                .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
+        }
         miniTitle.text = t.title
         miniArtist.text = t.artist.ifBlank { "Неизвестный исполнитель" }
         if (t.id != lastMiniId) {
             lastMiniId = t.id
+            miniCover.animate().cancel()
+            miniCover.alpha = 0.55f
+            miniCover.scaleX = 0.94f
+            miniCover.scaleY = 0.94f
+            miniCover.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(260).start()
             CoverLoader.load(lifecycleScope, this, t, miniCover, 96)
             adapter.notifyDataSetChanged() // подсветка играющей песни
         }
@@ -797,6 +808,9 @@ class MusicActivity : AppCompatActivity() {
             val liked = if (track != null) MusicTags.likedOf(ctx, track) else 0
             holder.itemView.alpha = if (liked < 0) 0.5f else 1f
             val playing = track != null && MusicService.isRunning && PlayerState.track?.id == track.id
+            holder.itemView.setBackgroundResource(
+                if (playing) R.drawable.harmonia_row_playing else R.drawable.harmonia_row_bg
+            )
             holder.title.setTextColor(ContextCompat.getColor(ctx, if (playing) R.color.music_accent else R.color.music_text))
             holder.itemView.setOnClickListener { row.onClick() }
             if (track != null) {
