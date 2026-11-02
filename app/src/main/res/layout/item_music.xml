@@ -2,7 +2,7 @@
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent" android:layout_height="wrap_content"
-    android:minHeight="82dp"
+    android:minHeight="84dp"
     android:layout_marginStart="10dp" android:layout_marginEnd="10dp"
     android:layout_marginTop="4dp" android:layout_marginBottom="4dp"
     android:background="@drawable/harmonia_row_bg"
@@ -39,7 +39,7 @@
 
     <ImageButton
         android:id="@+id/heart" android:layout_width="42dp" android:layout_height="48dp"
-        android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Нравится"
+        android:background="@drawable/harmonia_icon_button" android:contentDescription="Нравится"
         android:padding="11dp" android:scaleType="fitCenter" android:src="@drawable/ic_heart" android:tint="@color/music_text_dim" />
     <ImageButton
         android:id="@+id/menu" android:layout_width="42dp" android:layout_height="48dp"
