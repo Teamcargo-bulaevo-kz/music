@@ -23,22 +23,18 @@ import kotlinx.coroutines.withContext
 /** Полноэкранный плеер: обложка, перемотка, режимы, очередь, «ещё такое», таймер сна. */
 class PlayerActivity : AppCompatActivity() {
 
+    private lateinit var aura: AuraView
     private val handler = Handler(Looper.getMainLooper())
     private var userSeeking = false
     private var shownTrackId = -1L
-    private lateinit var spectrum: SpectrumGlowView
-    private lateinit var moodProfile: MoodProfileView
 
     private lateinit var cover: ImageView
     private lateinit var title: TextView
     private lateinit var artist: TextView
-    private lateinit var tags: TextView
     private lateinit var seek: SeekBar
     private lateinit var timeNow: TextView
     private lateinit var timeTotal: TextView
     private lateinit var play: ImageButton
-    private lateinit var shuffle: ImageButton
-    private lateinit var repeat: ImageButton
     private lateinit var likeButton: ImageButton
     private lateinit var dislikeButton: ImageButton
 
@@ -54,25 +50,19 @@ class PlayerActivity : AppCompatActivity() {
         edgeToEdge()
         setContentView(R.layout.activity_player)
         findViewById<View>(R.id.content).padForSystemBars()
-        // В плеере волна спектра главная, поэтому пламя фона тише
-        findViewById<FlameBackgroundView>(R.id.flameBackground).apply { boost = 1.2f; flame = 0.45f }
-        spectrum = findViewById(R.id.spectrum)
-        moodProfile = findViewById(R.id.moodProfile)
+        aura = findViewById(R.id.aura)
         cover = findViewById(R.id.cover)
         title = findViewById(R.id.title)
         artist = findViewById(R.id.artist)
-        tags = findViewById(R.id.tags)
         seek = findViewById(R.id.seek)
         timeNow = findViewById(R.id.timeNow)
         timeTotal = findViewById(R.id.timeTotal)
         play = findViewById(R.id.play)
-        shuffle = findViewById(R.id.shuffle)
-        repeat = findViewById(R.id.repeat)
 
-        // Обложка квадратная и по центру: размер по меньшей стороне свободного места
+        // Обложка небольшая и по центру, вокруг много воздуха
         val coverBox = findViewById<android.view.View>(R.id.coverBox)
         coverBox.addOnLayoutChangeListener { v, l, t, r, b, _, _, _, _ ->
-            val side = minOf(r - l, b - t)
+            val side = (minOf(r - l - v.paddingLeft - v.paddingRight, b - t) * 0.8f).toInt().coerceAtMost((260 * resources.displayMetrics.density).toInt())
             val lp = cover.layoutParams as android.widget.FrameLayout.LayoutParams
             if (side > 0 && (lp.width != side || lp.height != side)) {
                 lp.width = side; lp.height = side; lp.gravity = android.view.Gravity.CENTER
@@ -82,8 +72,6 @@ class PlayerActivity : AppCompatActivity() {
         play.setOnClickListener { pulse(it); MusicService.instance?.togglePlay() }
         findViewById<ImageButton>(R.id.next).setOnClickListener { pulse(it); MusicService.instance?.skipNext() }
         findViewById<ImageButton>(R.id.prev).setOnClickListener { pulse(it); MusicService.instance?.skipPrevious() }
-        shuffle.setOnClickListener { pulse(it); MusicService.instance?.toggleShuffle() }
-        repeat.setOnClickListener { pulse(it); MusicService.instance?.cycleRepeat() }
         likeButton = findViewById(R.id.likeButton)
         dislikeButton = findViewById(R.id.dislikeButton)
         likeButton.setOnClickListener { pulse(it); rate(1) }
@@ -106,7 +94,6 @@ class PlayerActivity : AppCompatActivity() {
         super.onResume()
         shownTrackId = -1L // характеристики могли поменять в редакторе
         // Спектр приходит от общего анализатора звука; разрешение просит главный экран с пояснением
-        BeatSource.fftListener = { data -> spectrum.setFftData(data) }
         if (!BeatSource.isLive && ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             BeatSource.attach(MusicService.instance?.audioSessionId ?: 0)
         }
@@ -120,8 +107,6 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onPause() {
         handler.removeCallbacks(ticker)
-        BeatSource.fftListener = null
-        spectrum.setFftData(null)
         super.onPause()
     }
 
@@ -150,27 +135,12 @@ class PlayerActivity : AppCompatActivity() {
             cover.animate().alpha(1f).scaleX(1f).scaleY(1f).setDuration(360)
                 .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
             CoverLoader.load(lifecycleScope, this, track, cover, 800)
-            val tg = MusicTags.get(this, track)
-            val tagged = tg?.takeIf { MusicTags.isTagged(it) }
-            moodProfile.setScores(tagged?.moodScores.orEmpty())
-            moodProfile.visibility = if (tagged?.moodScores?.isNotEmpty() == true) View.VISIBLE else View.GONE
-            tags.text = tagged?.let {
-                val mood = it.moodScores.entries.sortedByDescending { entry -> entry.value }.take(2)
-                    .joinToString(" · ") { entry -> "${MusicTags.moodShort[entry.key] ?: entry.key} ${entry.value}%" }
-                val rhythm = if (it.bpm > 0) "${it.bpm} BPM" else "ритм не определён"
-                val dance = if (it.danceability > 0) " · танцевальность ${it.danceability}%" else ""
-                "$mood\n$rhythm · энергия ${it.energy * 20}%$dance · точность оценки ${it.confidence}%"
-            }.orEmpty()
+            val tagged = MusicTags.get(this, track)?.takeIf { MusicTags.isTagged(it) }
+            aura.setAura(if (tagged == null) MoodPalette.DEFAULT else MoodPalette.from(
+                tagged.moodScores.ifEmpty { mapOf(tagged.mood to 100) }, tagged.arousal))
         }
         showRating(MusicTags.likedOf(this, track))
         play.setImageResource(if (PlayerState.playing) R.drawable.ic_pause else R.drawable.ic_play)
-        shuffle.alpha = if (PlayerState.shuffle) 1f else 0.4f
-        repeat.alpha = if (PlayerState.repeat == PlayerState.REPEAT_OFF) 0.4f else 1f
-        repeat.contentDescription = when (PlayerState.repeat) {
-            PlayerState.REPEAT_ONE -> "Повтор одного трека"
-            PlayerState.REPEAT_ALL -> "Повтор очереди"
-            else -> "Повтор выключен"
-        }
         val duration = PlayerState.durationMs
         seek.max = if (duration > 0) duration else 1
         if (!userSeeking) {
@@ -215,6 +185,12 @@ class PlayerActivity : AppCompatActivity() {
         menu.menu.add(0, 2, 2, "Очередь")
         menu.menu.add(0, 3, 3, "Ещё такое")
         menu.menu.add(0, 4, 4, "Таймер сна")
+        menu.menu.add(0, 6, 5, if (PlayerState.shuffle) "Вперемешку: включено" else "Вперемешку: выключено")
+        menu.menu.add(0, 7, 6, when (PlayerState.repeat) {
+            PlayerState.REPEAT_ONE -> "Повтор: один трек"
+            PlayerState.REPEAT_ALL -> "Повтор: очередь"
+            else -> "Повтор: выключен"
+        })
         menu.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> PlayerState.track?.let {
@@ -224,6 +200,8 @@ class PlayerActivity : AppCompatActivity() {
                 2 -> showQueue()
                 3 -> playSimilar()
                 4 -> showSleepTimer()
+                6 -> MusicService.instance?.toggleShuffle()
+                7 -> MusicService.instance?.cycleRepeat()
             }
             true
         }
