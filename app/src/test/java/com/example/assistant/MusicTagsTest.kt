@@ -8,6 +8,26 @@ import org.junit.Test
 
 class MusicTagsTest {
 
+    @Test fun customPlaylistFilterCombinesMoodEnergyAndTempo() {
+        val tags = TrackTags("pop", "happy", 4, moods = setOf("happy", "dance"),
+            moodScores = mapOf("calm" to 12), bpm = 122)
+        assertTrue(MusicTags.matchesPlaylistFilter(tags, "happy", 3, 110, 130))
+        assertTrue(MusicTags.matchesPlaylistFilter(tags, "calm", 4, 120, 125))
+        assertFalse(MusicTags.matchesPlaylistFilter(tags, "sad", 3, 110, 130))
+        assertFalse(MusicTags.matchesPlaylistFilter(tags, "happy", 5, 110, 130))
+        assertFalse(MusicTags.matchesPlaylistFilter(tags, "happy", 3, 130, 160))
+    }
+
+    @Test fun customPlaylistFilterHandlesUnknownTempoAndInvalidRanges() {
+        val tags = TrackTags("other", "calm", 2, bpm = 0)
+        assertFalse(MusicTags.matchesPlaylistFilter(tags, null, 2, 100, 140))
+        assertTrue(MusicTags.matchesPlaylistFilter(tags, null, 2))
+        assertTrue(MusicTags.matchesPlaylistFilter(tags.copy(bpm = 120), null, 2, 100, 140))
+        assertFalse(MusicTags.matchesPlaylistFilter(tags, null, 2, 150, 100))
+        assertFalse(MusicTags.matchesPlaylistFilter(tags, null, 0, 0, 0))
+        assertFalse(MusicTags.matchesPlaylistFilter(tags, null, 2, 0, 241))
+    }
+
     @Test fun moodFromSpeech() {
         assertEquals("calm", MusicTags.moodFromWords("спокойную музыку"))
         assertEquals("energetic", MusicTags.moodFromWords("что нибудь энергичное"))

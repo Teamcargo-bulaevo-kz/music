@@ -4,12 +4,18 @@ import android.media.audiofx.Visualizer
 import android.os.SystemClock
 import kotlin.math.PI
 import kotlin.math.hypot
+import kotlin.math.max
+import kotlin.math.pow
 import kotlin.math.sin
 
 /**
- * Ритм играющей музыки для анимации фона: [bass] (низкие частоты, «удар») и [level] (общая громкость), оба от 0 до 1.
- * Настоящий звук берётся через [Visualizer] (нужно разрешение на запись звука). Если его нет,
- * пока музыка играет, фон живёт по мягкому условному ритму, чтобы экран не был мёртвым.
+ * Единственный владелец системного анализатора звука [Visualizer].
+ * Из него берутся: [bass] (удар, 0..1), [level] (общая громкость, 0..1) и сырой спектр для [SpectrumGlowView]
+ * через [fftListener]. Значения подстраиваются под громкость сами, поэтому фон одинаково живо ходит
+ * и на тихом, и на громком звуке.
+ *
+ * Нужно разрешение «Запись звука» (микрофон при этом не включается). Если его нет или прошивка не даёт
+ * анализатор, пока играет музыка, фон живёт по мягкому условному ритму.
  */
 object BeatSource {
     @Volatile var bass = 0f
@@ -17,28 +23,40 @@ object BeatSource {
     @Volatile var level = 0f
         private set
 
+    /** Получает копию спектра (re, im попарно) на потоке анализатора. Ставится на время жизни экрана плеера. */
+    @Volatile var fftListener: ((ByteArray) -> Unit)? = null
+
     private var visualizer: Visualizer? = null
     private var live = false
-    private var lastRealFrame = 0L
+    @Volatile private var lastRealFrame = 0L
+    private var bassPeak = 12f
+    private var levelPeak = 6f
+
+    /** true, если приходят настоящие данные звука, а не условный ритм. */
+    val isLive: Boolean get() = live && SystemClock.uptimeMillis() - lastRealFrame < 600
 
     fun attach(sessionId: Int) {
         detach()
-        if (sessionId == 0) return // 0 это общий микс всего телефона, его не трогаем
+        if (sessionId <= 0) return // 0 это общий микс всего телефона, его не трогаем
         try {
+            val range = Visualizer.getCaptureSizeRange()
             val v = Visualizer(sessionId)
             v.enabled = false
-            v.captureSize = Visualizer.getCaptureSizeRange()[0].coerceAtLeast(256)
+            v.captureSize = minOf(1024, range[1]).coerceAtLeast(range[0])
             v.setDataCaptureListener(object : Visualizer.OnDataCaptureListener {
                 override fun onWaveFormDataCapture(vis: Visualizer?, waveform: ByteArray?, samplingRate: Int) {}
                 override fun onFftDataCapture(vis: Visualizer?, fft: ByteArray?, samplingRate: Int) {
-                    if (fft != null) process(fft, samplingRate)
+                    if (fft != null) {
+                        process(fft, samplingRate)
+                        fftListener?.invoke(fft)
+                    }
                 }
-            }, Visualizer.getMaxCaptureRate() / 2, false, true)
+            }, Visualizer.getMaxCaptureRate(), false, true)
             v.enabled = true
             visualizer = v
             live = true
         } catch (e: Throwable) {
-            // нет разрешения или эффект не поддерживается: останется условный ритм
+            // нет разрешения или прошивка не даёт анализатор: останется условный ритм
             visualizer = null
             live = false
         }
@@ -60,8 +78,7 @@ object BeatSource {
     private fun process(fft: ByteArray, samplingRateMilliHz: Int) {
         val bins = fft.size / 2
         if (bins < 4) return
-        val hz = samplingRateMilliHz / 1000f
-        val binHz = hz / 2f / bins
+        val binHz = samplingRateMilliHz / 1000f / 2f / bins
         if (binHz <= 0f) return
         var bassSum = 0f
         var bassN = 0
@@ -74,10 +91,15 @@ object BeatSource {
             if (f in 40f..220f) { bassSum += m; bassN++ }
             allSum += m; allN++
         }
-        val b = if (bassN > 0) (bassSum / bassN / 70f).coerceIn(0f, 1f) else 0f
-        val l = if (allN > 0) (allSum / allN / 28f).coerceIn(0f, 1f) else 0f
+        val rawBass = if (bassN > 0) bassSum / bassN else 0f
+        val rawLevel = if (allN > 0) allSum / allN else 0f
+        // Автоподстройка: «потолок» быстро растёт на пике и медленно опускается
+        bassPeak = max(bassPeak * 0.992f, max(rawBass, 6f))
+        levelPeak = max(levelPeak * 0.992f, max(rawLevel, 3f))
+        val b = (rawBass / bassPeak).coerceIn(0f, 1f).pow(1.4f)
+        val l = (rawLevel / levelPeak).coerceIn(0f, 1f).pow(1.2f)
         // быстро растём на ударе, плавно затухаем
-        bass = if (b > bass) bass + (b - bass) * 0.7f else bass * 0.9f + b * 0.1f
+        bass = if (b > bass) bass + (b - bass) * 0.75f else bass * 0.88f + b * 0.12f
         level = if (l > level) level + (l - level) * 0.5f else level * 0.93f + l * 0.07f
         lastRealFrame = SystemClock.uptimeMillis()
     }
@@ -89,10 +111,8 @@ object BeatSource {
             level *= 0.95f
             return
         }
-        val now = SystemClock.uptimeMillis()
-        val realFresh = live && now - lastRealFrame < 400
-        if (realFresh) return
-        val t = now / 1000.0
+        if (isLive) return
+        val t = SystemClock.uptimeMillis() / 1000.0
         val pulse = (sin(t * 2 * PI * 2.0) * 0.5 + 0.5).toFloat()
         val slow = (sin(t * 2 * PI * 0.37) * 0.5 + 0.5).toFloat()
         val fakeBass = 0.15f + 0.55f * pulse * pulse * (0.6f + 0.4f * slow)

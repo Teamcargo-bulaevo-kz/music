@@ -32,6 +32,9 @@ class FlameBackgroundView @JvmOverloads constructor(
     /** 1 для списка (спокойнее, чтобы не мешать тексту), больше для экрана плеера. */
     var boost = 1f
 
+    /** Доля высоты пламени: 1 полное, 0 без пламени (остаются только переливающиеся пятна). */
+    var flame = 1f
+
     private val basePaint = Paint()
     private val blobPaint = Paint(Paint.ANTI_ALIAS_FLAG)
     private val flamePaint = Paint(Paint.ANTI_ALIAS_FLAG).apply {
@@ -83,6 +86,15 @@ class FlameBackgroundView @JvmOverloads constructor(
         }
     }
 
+    /** Когда экран закрыт другим окном или телефон заблокирован, анимацию не гоним. */
+    override fun onWindowVisibilityChanged(visibility: Int) {
+        super.onWindowVisibilityChanged(visibility)
+        if (visibility == VISIBLE && attached) {
+            lastFrame = 0L
+            postInvalidateOnAnimation()
+        }
+    }
+
     private fun mix(phase: Float): Int {
         val p = ((phase % 1f) + 1f) % 1f * palette.size
         val i = p.toInt() % palette.size
@@ -123,7 +135,7 @@ class FlameBackgroundView @JvmOverloads constructor(
         val step = max(8f, w / 28f)
         for (layer in 0 until 3) {
             val reach = (0.10f + 0.20f * smoothBass + 0.10f * smoothLevel) * boost * (1f - 0.22f * layer)
-            val flameH = h * reach.coerceIn(0.06f, 0.55f)
+            val flameH = h * reach.coerceIn(0.06f, 0.55f) * flame
             path.reset()
             path.moveTo(0f, h)
             var x = 0f
@@ -143,6 +155,7 @@ class FlameBackgroundView @JvmOverloads constructor(
             canvas.drawPath(path, flamePaint)
         }
 
-        if (attached && visibility == VISIBLE) postInvalidateOnAnimation()
+        // 30 кадров в секунду: заметно экономит заряд и процессор, глазу плавности хватает
+        if (attached && visibility == VISIBLE && windowVisibility == VISIBLE) postInvalidateDelayed(33)
     }
 }

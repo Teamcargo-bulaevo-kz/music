@@ -4,8 +4,8 @@ plugins {
 }
 
 // Идентификатор приложения в Google Play. ПОСЛЕ ПЕРВОЙ ПУБЛИКАЦИИ МЕНЯТЬ НЕЛЬЗЯ.
-// Пока не выбран: com.example.* Google Play не принимает, поэтому сборка bundleRelease ниже остановится с понятной ошибкой.
-val playApplicationId = "com.example.assistant"
+// Выбран в ветке music (com.teamcargo.harmonia). Идентификатор com.example.* Google Play не принимает: сборка bundleRelease остановится.
+val playApplicationId = "com.teamcargo.harmonia"
 
 android {
     namespace = "com.example.assistant"
@@ -15,14 +15,16 @@ android {
         applicationId = playApplicationId
         minSdk = 26
         targetSdk = 36
-        versionCode = 39
-        versionName = "2.0.0"
+        versionCode = 40
+        versionName = "2.1.0"
         // Только телефонные процессоры
         ndk { abiFilters += listOf("arm64-v8a", "armeabi-v7a") }
         // Метка сборки: ветка и короткий номер коммита (в CI берутся из GitHub)
         buildConfigField("String", "BUILD_TAG", "\"${(System.getenv("GITHUB_REF_NAME") ?: "local").substringAfterLast('/')} ${(System.getenv("GITHUB_SHA") ?: "").take(7)}\"")
-        // ВРЕМЕННО: ключ ИИ-разметки попадает в APK. До публикации перенести запросы на свой сервер.
-        buildConfigField("String", "GROQ_API_KEY", "\"${System.getenv("GROQ_API_KEY") ?: ""}\"")
+        // Необязательный сервер разметки по метаданным. Ключ ИИ живёт на сервере, в приложении его нет.
+        // Пустой адрес выключает серверный этап: локальный анализ звука работает всегда.
+        buildConfigField("String", "MUSIC_INTELLIGENCE_URL", "\"${System.getenv("MUSIC_INTELLIGENCE_URL") ?: ""}\"")
+        buildConfigField("String", "MUSIC_INTELLIGENCE_TOKEN", "\"${System.getenv("MUSIC_INTELLIGENCE_TOKEN") ?: ""}\"")
     }
 
     // Подпись релиза: ключ и пароли берутся из переменных окружения (в CI из секретов), в репозитории их нет

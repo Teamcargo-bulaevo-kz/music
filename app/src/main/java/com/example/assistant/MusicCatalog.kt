@@ -10,7 +10,7 @@ import kotlinx.coroutines.launch
 import java.io.File
 
 /**
- * Таблица Assistant/Музыка.xlsx: приложение само создаёт её и обновляет, а при переустановке или на другом
+ * Таблица Музыка.xlsx (в личной папке приложения, наружу уходит кнопкой «Поделиться»): приложение само создаёт её и обновляет, а при переустановке или на другом
  * устройстве читает обратно. Так разметка не теряется. Таблицу можно править в Excel: изменения подхватятся.
  * Колонки совпадают с твоим файлом songs_by_mood.xlsx, плюс «Нравится», «Папки» и «Источник».
  */
@@ -56,12 +56,14 @@ object MusicCatalog {
         TrackTags.SOURCE_USER -> "Вручную"
         TrackTags.SOURCE_WEB -> "Интернет"
         TrackTags.SOURCE_IMPORT -> "Импорт"
+        TrackTags.SOURCE_LOCAL -> "Локальный анализ"
         else -> "ИИ"
     }
 
     private fun sourceFromLabel(text: String): String = when (text.trim().lowercase()) {
         "вручную", "вы", "user" -> TrackTags.SOURCE_USER
         "интернет", "web" -> TrackTags.SOURCE_WEB
+        "локальный анализ", "локально", "local" -> TrackTags.SOURCE_LOCAL
         "ии", "ai" -> TrackTags.SOURCE_AI
         else -> TrackTags.SOURCE_IMPORT
     }

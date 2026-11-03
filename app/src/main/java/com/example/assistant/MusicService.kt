@@ -9,6 +9,7 @@ import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.graphics.drawable.Icon
+import android.graphics.Color
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
@@ -53,6 +54,9 @@ class MusicService : Service() {
     private lateinit var audioManager: AudioManager
     private var session: MediaSession? = null
     private var player: MediaPlayer? = null
+
+    /** Audio session активного трека для спектрального визуализатора экрана плеера. */
+    val audioSessionId: Int get() = player?.audioSessionId ?: 0
 
     private var prepared = false
     private var wantPlay = true
@@ -255,13 +259,16 @@ class MusicService : Service() {
     }
 
     private fun resume() {
-        val current = player
-        if (current == null) {
-            if (queue.isNotEmpty()) playCurrent()
+        // Воспроизведение разрешено только после явного ACTION_PLAY.
+        // Системный MediaSession/кнопка Resume не должны создавать новый трек
+        // или запускать случайную очередь после пересоздания службы.
+        val current = player ?: return
+        if (!prepared) {
+            wantPlay = true
             return
         }
-        wantPlay = true
-        if (prepared && !current.isPlaying) {
+        if (!current.isPlaying) {
+            wantPlay = true
             requestFocus()
             current.start()
         }
@@ -424,6 +431,9 @@ class MusicService : Service() {
         )
         val builder = Notification.Builder(this, CHANNEL_ID)
             .setSmallIcon(android.R.drawable.ic_media_play)
+            .setColor(Color.rgb(82, 190, 210))
+            .setCategory(Notification.CATEGORY_TRANSPORT)
+            .setPriority(Notification.PRIORITY_LOW)
             .setContentTitle(track?.title ?: "Музыка")
             .setContentText(track?.artist.orEmpty())
             .setContentIntent(open)
