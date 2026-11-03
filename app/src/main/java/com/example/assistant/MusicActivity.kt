@@ -600,11 +600,12 @@ class MusicActivity : AppCompatActivity() {
         if (tg == null || !MusicTags.isTagged(tg)) return ""
         val moods = if (tg.moodScores.isNotEmpty()) {
             tg.moodScores.entries.sortedByDescending { it.value }.take(2)
-                .joinToString(" · ") { entry ->
-                    (MusicTags.moodShort[entry.key]?.lowercase() ?: entry.key) + " " + entry.value + "%"
-                }
+                .joinToString(", ") { MusicTags.moodShort[it.key]?.lowercase() ?: it.key }
         } else tg.moods.joinToString(", ") { MusicTags.moodShort[it]?.lowercase() ?: it }
-        return "$moods · ${tg.genreText.lowercase()}"
+        return listOfNotNull(
+            moods.takeIf { it.isNotBlank() },
+            tg.bpm.takeIf { it > 0 }?.let { "$it BPM" }
+        ).joinToString(" · ")
     }
 
     private fun trackRows(tracks: List<MusicTrack>): List<Row> =

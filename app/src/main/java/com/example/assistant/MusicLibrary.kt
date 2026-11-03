@@ -101,7 +101,36 @@ object MusicLibrary {
         } catch (e: SecurityException) {
             // нет доступа к аудио — вернём пустой список
         }
-        return result
+        return result.map { repairText(context, it) }
+    }
+
+    /** Чинит «кракозябры» в названии/исполнителе: сначала перекодировкой, потом чтением ID3 из файла. */
+    private fun repairText(context: Context, t: MusicTrack): MusicTrack {
+        if (!Id3Tags.looksBroken(t.title) && !Id3Tags.looksBroken(t.artist) && !Id3Tags.looksBroken(t.album)) return t
+        var title = Id3Tags.repairLatin1(t.title)
+        var artist = Id3Tags.repairLatin1(t.artist)
+        var album = Id3Tags.repairLatin1(t.album)
+        if (Id3Tags.looksBroken(title) || Id3Tags.looksBroken(artist) || Id3Tags.looksBroken(album)) {
+            try {
+                context.contentResolver.openInputStream(t.uri)?.use { input ->
+                    val buf = ByteArray(65536)
+                    var n = 0
+                    while (n < buf.size) {
+                        val r = input.read(buf, n, buf.size - n)
+                        if (r <= 0) break
+                        n += r
+                    }
+                    Id3Tags.parse(buf.copyOf(n))?.let { id3 ->
+                        if (Id3Tags.looksBroken(title) && id3.title.isNotBlank()) title = id3.title
+                        if (Id3Tags.looksBroken(artist) && id3.artist.isNotBlank()) artist = id3.artist
+                        if (Id3Tags.looksBroken(album) && id3.album.isNotBlank()) album = id3.album
+                    }
+                }
+            } catch (e: Exception) {
+                // файл недоступен — оставим как есть
+            }
+        }
+        return t.copy(title = title, artist = artist, album = album)
     }
 }
 
