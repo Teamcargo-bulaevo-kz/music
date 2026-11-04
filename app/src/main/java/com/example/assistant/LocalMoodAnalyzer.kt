@@ -215,11 +215,10 @@ object LocalMoodAnalyzer {
             bpm >= 120 && bpm / 2 in 60..90 && (byTempo[bpm / 2] ?: 0.0) >= best * 0.92 -> bpm / 2
             else -> bpm
         }
-        val plausible = correlations.filter { it.second >= best * 0.90 }
-        val musicalRange = plausible.filter { it.first in 80..160 }
-        val selected = if (octaveCorrected != bpm) octaveCorrected
-            else (if (musicalRange.isNotEmpty()) musicalRange else plausible)
-                .minByOrNull { abs(it.first - 120) }?.first ?: bpm
+        // Не притягиваем результат к 120 BPM: выбираем фактический максимум
+        // корреляции. Иначе широкий набор близких пиков систематически смещал
+        // медленные и быстрые композиции к условно «среднему» темпу.
+        val selected = octaveCorrected
         // Слабая корреляция — это отсутствие надёжного ритмического пульса, а не случайный BPM.
         val reliableTempo = if (best >= 0.12) selected else 0
         return best.coerceIn(0.0,1.0) to reliableTempo
