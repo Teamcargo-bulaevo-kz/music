@@ -46,6 +46,21 @@ object LocalMoodAnalyzer {
         return result
     }
 
+    /** Approximate dynamic transitions between adjacent analysis windows. */
+    internal fun transitionLabels(segments: List<MoodSegment>): List<String> {
+        if (segments.size < 2) return emptyList()
+        return segments.zipWithNext().mapNotNull { (previous, current) ->
+            val delta = current.arousal - previous.arousal
+            val at = current.startSeconds
+            val time = "%d:%02d".format(at / 60, at % 60)
+            when {
+                delta >= 15 -> "$time — нарастание энергии (+$delta)"
+                delta <= -15 -> "$time — спад энергии ($delta)"
+                else -> null
+            }
+        }
+    }
+
     /** Вес сегмента — только уникальная часть временной шкалы, без повторного учёта перекрытий. */
     internal fun segmentWeights(segments: List<MoodSegment>, durationSeconds: Int): List<Double> {
         if (segments.isEmpty()) return emptyList()
