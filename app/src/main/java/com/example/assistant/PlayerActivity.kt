@@ -121,6 +121,7 @@ class PlayerActivity : AppCompatActivity() {
         val debug = AppSettings.debugView
         aura.visibility = if (AppSettings.auraEnabled) View.VISIBLE else View.INVISIBLE
         title.textSize = AppSettings.titleSp
+        artist.textSize = AppSettings.artistSp
         findViewById<View>(R.id.seek).visibility = if (AppSettings.showSeek) View.VISIBLE else View.GONE
         findViewById<View>(R.id.timeRow).visibility = if (AppSettings.showSeek) View.VISIBLE else View.GONE
         likeButton.visibility = if (AppSettings.showRating) View.VISIBLE else View.GONE

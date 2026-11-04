@@ -84,5 +84,6 @@ object AppSettings {
 
     val coverFactor get() = floatArrayOf(0.45f, 0.6f, 0.8f)[coverSize]
     val buttonScale get() = floatArrayOf(0.85f, 1.0f, 1.2f)[buttonSize]
-    val titleSp get() = floatArrayOf(18f, 22f, 26f)[textSize]
+    val titleSp get() = floatArrayOf(14f, 17f, 20f)[textSize]
+    val artistSp get() = titleSp * 0.72f
 }
