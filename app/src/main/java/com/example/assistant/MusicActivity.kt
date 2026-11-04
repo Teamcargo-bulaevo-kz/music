@@ -114,6 +114,7 @@ class MusicActivity : AppCompatActivity() {
         edgeToEdge()
         setContentView(R.layout.activity_music)
         findViewById<View>(R.id.content).padForSystemBars()
+        showLastCrash()
         list = findViewById(R.id.list)
         tabs = findViewById(R.id.tabs)
         search = findViewById(R.id.search)
@@ -278,6 +279,20 @@ class MusicActivity : AppCompatActivity() {
             true
         }
         menu.show()
+    }
+
+    /** Если приложение упало в прошлый раз, показываем причину и даём отправить. */
+    private fun showLastCrash() {
+        val f = java.io.File(filesDir, "last_crash.txt")
+        if (!f.exists()) return
+        val text = try { f.readText() } catch (_: Exception) { return }
+        f.delete()
+        AlertDialog.Builder(this).setTitle("Приложение упало в прошлый раз")
+            .setMessage(text.take(1500))
+            .setPositiveButton("Поделиться") { _, _ ->
+                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, text), "Отправить"))
+            }
+            .setNegativeButton("Закрыть", null).show()
     }
 
     /** Команды из экрана настроек. */

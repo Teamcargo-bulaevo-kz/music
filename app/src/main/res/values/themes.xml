@@ -14,6 +14,10 @@
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">12dp</item>
     </style>
+    <style name="RoundFull" parent="">
+        <item name="cornerFamily">rounded</item>
+        <item name="cornerSize">50%</item>
+    </style>
     <style name="Round24" parent="">
         <item name="cornerFamily">rounded</item>
         <item name="cornerSize">24dp</item>

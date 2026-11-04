@@ -16,7 +16,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import com.google.android.material.materialswitch.MaterialSwitch
+import androidx.appcompat.widget.SwitchCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -82,11 +82,14 @@ class SettingsActivity : AppCompatActivity() {
 
         // Продвинутые
         val advanced = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
-        val toggle = actionRowView("Продвинутые настройки  ▾", "Ритм, отладка, обмен с другим ИИ, сброс") {}
+        val toggleTitle = TextView(this).apply {
+            text = "Продвинутые настройки  ▾"; textSize = 16f; setTextColor(getColor(R.color.harmonia_text))
+        }
+        val toggle = LinearLayout(this).apply { setPadding(0, px(12), 0, px(12)); addView(toggleTitle) }
         toggle.setOnClickListener {
             val open = advanced.visibility != View.VISIBLE
             advanced.visibility = if (open) View.VISIBLE else View.GONE
-            (toggle.getChildAt(0) as TextView).text = if (open) "Продвинутые настройки  ▴" else "Продвинутые настройки  ▾"
+            toggleTitle.text = if (open) "Продвинутые настройки  ▴" else "Продвинутые настройки  ▾"
         }
         root.addView(toggle, lp(top = 24))
         root.addView(advanced)
@@ -222,7 +225,7 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun switchView(title: String, subtitle: String?, on: Boolean, change: (Boolean) -> Unit): LinearLayout {
         val (row, _) = rowLayout(title, subtitle)
-        val sw = MaterialSwitch(this).apply { isChecked = on; setOnCheckedChangeListener { _, v -> change(v) } }
+        val sw = SwitchCompat(this).apply { isChecked = on; setOnCheckedChangeListener { _, v -> change(v) } }
         row.addView(sw)
         row.setOnClickListener { sw.toggle() }
         return row

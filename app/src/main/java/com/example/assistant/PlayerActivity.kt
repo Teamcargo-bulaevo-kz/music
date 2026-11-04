@@ -76,6 +76,7 @@ class PlayerActivity : AppCompatActivity() {
         coverBox.addOnLayoutChangeListener { v, l, t, r, b, _, _, _, _ ->
             val side = (minOf(r - l - v.paddingLeft - v.paddingRight, b - t) * AppSettings.coverFactor).toInt().coerceAtMost((240 * resources.displayMetrics.density).toInt())
             aura.centerYPx = (t + b) / 2f
+            aura.coverRadiusPx = (minOf(r - l - v.paddingLeft - v.paddingRight, b - t) * AppSettings.coverFactor).coerceAtMost(240 * resources.displayMetrics.density) / 2f
             val lp = cover.layoutParams as android.widget.FrameLayout.LayoutParams
             if (side > 0 && (lp.width != side || lp.height != side)) {
                 lp.width = side; lp.height = side; lp.gravity = android.view.Gravity.CENTER

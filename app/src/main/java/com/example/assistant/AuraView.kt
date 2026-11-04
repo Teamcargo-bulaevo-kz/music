@@ -9,8 +9,6 @@ import android.graphics.Shader
 import android.util.AttributeSet
 import android.view.View
 import androidx.core.graphics.ColorUtils
-import kotlin.math.max
-import kotlin.math.min
 
 /**
  * Атмосферное свечение за обложкой: неподвижный центр, мягкий радиальный градиент без границ.
@@ -25,6 +23,9 @@ class AuraView @JvmOverloads constructor(
 
     /** Центр свечения по вертикали в пикселях (за обложкой); пока не задан, берётся 40% высоты. */
     var centerYPx = -1f
+
+    /** Радиус круглой обложки в пикселях: цветной ореол начинается от её края. */
+    var coverRadiusPx = 0f
 
     private var target = MoodPalette.DEFAULT
     private var baseColor = target.color
@@ -89,20 +90,21 @@ class AuraView @JvmOverloads constructor(
         val cx = w / 2f
         val cy = if (centerYPx > 0f) centerYPx else h * 0.40f
         val gain = AppSettings.auraBrightness / 100f
-        val base = max(w, h * 0.55f)
-
-        // широкое мягкое свечение: радиус и яркость от баса
-        val outerR = base * (0.55f + 0.20f * bass)
-        val outerA = (gain * brightness * (0.22f + 0.40f * bass + 0.08f * treble)).coerceIn(0f, 0.8f)
+        val cr = if (coverRadiusPx > 0f) coverRadiusPx else w * 0.25f
+        // ореол: от края обложки наружу, радиус и яркость пульсируют от баса
+        val outerR = cr * (2.4f + 0.7f * bass)
+        val a = (gain * brightness * (0.45f + 0.50f * bass + 0.10f * treble)).coerceIn(0f, 0.95f)
+        val f = (cr / outerR).coerceIn(0.05f, 0.9f)
         paint.shader = RadialGradient(
             cx, cy, outerR,
             intArrayOf(
-                ColorUtils.setAlphaComponent(color, (outerA * 255).toInt()),
-                ColorUtils.setAlphaComponent(color, (outerA * 0.45f * 255).toInt()),
-                ColorUtils.setAlphaComponent(color, (outerA * 0.12f * 255).toInt()),
+                ColorUtils.setAlphaComponent(color, (a * 255).toInt()),
+                ColorUtils.setAlphaComponent(color, (a * 255).toInt()),
+                ColorUtils.setAlphaComponent(color, (a * 0.5f * 255).toInt()),
+                ColorUtils.setAlphaComponent(color, (a * 0.15f * 255).toInt()),
                 0x00000000
             ),
-            floatArrayOf(0f, 0.35f, 0.7f, 1f), Shader.TileMode.CLAMP
+            floatArrayOf(0f, f, f + (1f - f) * 0.3f, f + (1f - f) * 0.65f, 1f), Shader.TileMode.CLAMP
         )
         canvas.drawRect(0f, 0f, w, h, paint)
         paint.shader = null

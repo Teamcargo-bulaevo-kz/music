@@ -19,12 +19,12 @@ object MoodPalette {
 
     private val presets: Map<String, Aura> = mapOf(
         "energetic" to Aura(0xFFFF5A36.toInt(), 0.90f, 1.00f, 1.3f),
-        "calm" to Aura(0xFFBFD8FF.toInt(), 0.50f, 0.30f, 0.45f),
+        "calm" to Aura(0xFF4C8DFF.toInt(), 0.60f, 0.30f, 0.45f),
         "happy" to Aura(0xFFFFC857.toInt(), 0.80f, 0.70f, 1.0f),
-        "sad" to Aura(0xFF5B7BC0.toInt(), 0.42f, 0.30f, 0.40f),
+        "sad" to Aura(0xFF3B5BD6.toInt(), 0.42f, 0.30f, 0.40f),
         "romantic" to Aura(0xFFFF7FAE.toInt(), 0.60f, 0.50f, 0.70f),
         "dance" to Aura(0xFFE24BFF.toInt(), 0.90f, 0.95f, 1.2f),
-        "focus" to Aura(0xFF8FE3D6.toInt(), 0.38f, 0.25f, 0.40f),
+        "focus" to Aura(0xFF4CC3D9.toInt(), 0.38f, 0.25f, 0.40f),
         "epic" to Aura(0xFFFF9A3C.toInt(), 0.95f, 0.90f, 1.0f)
     )
 
