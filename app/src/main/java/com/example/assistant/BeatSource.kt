@@ -2,11 +2,9 @@ package com.example.assistant
 
 import android.media.audiofx.Visualizer
 import android.os.SystemClock
-import kotlin.math.PI
 import kotlin.math.hypot
 import kotlin.math.max
 import kotlin.math.pow
-import kotlin.math.sin
 
 /**
  * Единственный владелец системного анализатора звука [Visualizer].
@@ -64,7 +62,7 @@ object BeatSource {
             visualizer = v
             live = true
         } catch (e: Throwable) {
-            // нет разрешения или прошивка не даёт анализатор: останется условный ритм
+            // Нет разрешения или прошивка не поддерживает Visualizer: оставляем свечение без пульсации.
             visualizer = null
             live = false
         }
@@ -126,7 +124,7 @@ object BeatSource {
         lastRealFrame = SystemClock.uptimeMillis()
     }
 
-    /** Вызывается из рисующего вида на каждом кадре. Без настоящего звука делает условный ритм. */
+    /** Вызывается из рисующего вида. При отсутствии реального сигнала значения плавно затухают. */
     fun tick(playing: Boolean) {
         if (!playing) {
             bass *= 0.92f
@@ -136,15 +134,9 @@ object BeatSource {
             return
         }
         if (isLive) return
-        val t = SystemClock.uptimeMillis() / 1000.0
-        val pulse = (sin(t * 2 * PI * 2.0) * 0.5 + 0.5).toFloat()
-        val slow = (sin(t * 2 * PI * 0.37) * 0.5 + 0.5).toFloat()
-        val fakeBass = 0.15f + 0.55f * pulse * pulse * (0.6f + 0.4f * slow)
-        val fakeLevel = 0.25f + 0.3f * slow + 0.15f * pulse
-        bass += (fakeBass - bass) * 0.25f
-        level += (fakeLevel - level) * 0.15f
-        val slow2 = (sin(t * 2 * PI * 0.23) * 0.5 + 0.5).toFloat()
-        mid += (0.3f + 0.4f * slow2 - mid) * 0.05f
-        treble += (0.2f + 0.3f * slow - treble) * 0.05f
+        bass *= 0.88f
+        level *= 0.94f
+        mid *= 0.94f
+        treble *= 0.94f
     }
 }
