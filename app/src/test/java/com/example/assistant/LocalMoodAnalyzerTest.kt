@@ -124,6 +124,19 @@ class LocalMoodAnalyzerTest {
         assertTrue(transitions[2].contains("спад энергии"))
     }
 
+    @Test fun strongBeatAccentExceedsWeakOffbeatPulse() {
+        val pulses = List(240) { index ->
+            when (index % 5) {
+                0 -> 1.0
+                2 -> 0.2
+                else -> 0.0
+            }
+        }
+        val accent = LocalMoodAnalyzer.estimateBeatAccent(pulses, 10.0, 120)
+        assertTrue("Expected strong beat contrast, got $accent", accent > 0.35)
+        assertEquals(0.0, LocalMoodAnalyzer.estimateBeatAccent(pulses, 10.0, 0), 0.0)
+    }
+
     @Test fun overlappingSegmentsAreWeightedByUniqueTimelineCoverage() {
         val segments = listOf(
             MoodSegment(0, 20, "calm", 50, 20, 10, mapOf("calm" to 100)),
