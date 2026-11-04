@@ -89,15 +89,15 @@ class TrackEditActivity : AppCompatActivity() {
             moodProfile.text = "После анализа здесь появится профиль настроений."
             segmentProfile.visibility = View.GONE
         } else {
-            val bpmText = if (tags.bpm > 0) "\${tags.bpm} BPM" else "не определён"
+            val bpmText = if (tags.bpm > 0) "${tags.bpm} BPM" else "не определён"
             metrics.text = listOf(
                 "Темп: $bpmText",
-                "Энергия: \${tags.energy}/5",
-                "Танцевальность: \${tags.danceability}/100",
-                "Позитивность: \${tags.valence}/100",
-                "Возбуждение: \${tags.arousal}/100",
-                "Напряжение: \${tags.tension}/100",
-                "Качество входных данных: \${tags.confidence}/100"
+                "Энергия: ${tags.energy}/5",
+                "Танцевальность: ${tags.danceability}/100",
+                "Позитивность: ${tags.valence}/100",
+                "Возбуждение: ${tags.arousal}/100",
+                "Напряжение: ${tags.tension}/100",
+                "Качество входных данных: ${tags.confidence}/100"
             ).joinToString("\n")
             val moodLines = tags.moodScores.entries.sortedByDescending { it.value }.take(5)
                 .mapNotNull { (key, score) -> MusicTags.moods[key]?.let { "$it — $score%" } }
@@ -112,7 +112,7 @@ class TrackEditActivity : AppCompatActivity() {
                     val mood = MusicTags.moods[segment.mood] ?: segment.mood
                     val start = "%d:%02d".format(segment.startSeconds / 60, segment.startSeconds % 60)
                     val end = "%d:%02d".format(segment.endSeconds / 60, segment.endSeconds % 60)
-                    "$start–$end  $mood · энергия \${segment.arousal}/100"
+                    "$start–$end  $mood · энергия ${segment.arousal}/100"
                 }
             }
         }
