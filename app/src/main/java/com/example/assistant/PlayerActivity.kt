@@ -175,9 +175,9 @@ class PlayerActivity : AppCompatActivity() {
             moodProfile.setScores(tagged?.moodScores.orEmpty())
             moodProfile.visibility = if (AppSettings.debugView && tagged?.moodScores?.isNotEmpty() == true) View.VISIBLE else View.GONE
             tags.text = tagged?.let { trackSummary(it, "\n") }.orEmpty()
-            aura.setAura(if (tagged == null) MoodPalette.DEFAULT else MoodPalette.from(
-                tagged.moodScores.ifEmpty { mapOf(tagged.mood to 100) }, tagged.arousal))
+            updateAuraForPosition(tagged)
         }
+        updateAuraForPosition(MusicTags.get(this, track)?.takeIf { MusicTags.isTagged(it) })
         showRating(MusicTags.likedOf(this, track))
         play.setImageResource(if (PlayerState.playing) R.drawable.ic_pause else R.drawable.ic_play)
         shuffle.alpha = if (PlayerState.shuffle) 1f else 0.4f
@@ -189,6 +189,20 @@ class PlayerActivity : AppCompatActivity() {
             timeNow.text = PlayerState.formatTime(PlayerState.position())
         }
         timeTotal.text = PlayerState.formatTime(duration)
+    }
+
+    /** Палитра меняется по временным сегментам композиции; BPM управляет скоростью перелива. */
+    private fun updateAuraForPosition(tags: TrackTags?) {
+        if (tags == null) {
+            aura.setAura(MoodPalette.DEFAULT)
+            return
+        }
+        val seconds = PlayerState.position() / 1000
+        val segment = tags.segments.firstOrNull { seconds >= it.startSeconds && seconds < it.endSeconds }
+            ?: tags.segments.lastOrNull { seconds >= it.startSeconds }
+        val scores = segment?.scores?.takeIf { it.isNotEmpty() }
+            ?: tags.moodScores.ifEmpty { mapOf((segment?.mood ?: tags.mood) to 100) }
+        aura.setAura(MoodPalette.from(scores, segment?.arousal ?: tags.arousal, tags.bpm))
     }
 
     private fun pulse(view: View) {
