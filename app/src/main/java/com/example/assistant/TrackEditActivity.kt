@@ -80,6 +80,43 @@ class TrackEditActivity : AppCompatActivity() {
             tags.edited -> "Настроено тобой"
             else -> "Определил ${if (tags.source == TrackTags.SOURCE_WEB) "по данным из интернета" else "ИИ"}, уверенность: ${MusicCatalog.confidenceLabel(tags.confidence).lowercase()}"
         }
+        // Read-only technical profile: distinguish measured audio features from editable labels.
+        val metrics = findViewById<TextView>(R.id.analysisMetrics)
+        val moodProfile = findViewById<TextView>(R.id.analysisMood)
+        val segmentProfile = findViewById<TextView>(R.id.analysisSegments)
+        if (tags == null || !tagged) {
+            metrics.text = "Анализ ещё не выполнен"
+            moodProfile.text = "После анализа здесь появится профиль настроений."
+            segmentProfile.visibility = View.GONE
+        } else {
+            val bpmText = if (tags.bpm > 0) "\${tags.bpm} BPM" else "не определён"
+            metrics.text = listOf(
+                "Темп: $bpmText",
+                "Энергия: \${tags.energy}/5",
+                "Танцевальность: \${tags.danceability}/100",
+                "Позитивность: \${tags.valence}/100",
+                "Возбуждение: \${tags.arousal}/100",
+                "Напряжение: \${tags.tension}/100",
+                "Качество входных данных: \${tags.confidence}/100"
+            ).joinToString("\n")
+            val moodLines = tags.moodScores.entries.sortedByDescending { it.value }.take(5)
+                .mapNotNull { (key, score) -> MusicTags.moods[key]?.let { "$it — $score%" } }
+            moodProfile.text = if (moodLines.isEmpty()) "Профиль настроений не сохранён"
+                else moodLines.joinToString("   ·   ")
+            val segments = tags.segments
+            if (segments.isEmpty()) {
+                segmentProfile.visibility = View.GONE
+            } else {
+                segmentProfile.visibility = View.VISIBLE
+                segmentProfile.text = "Изменения по ходу трека:\n" + segments.joinToString("\n") { segment ->
+                    val mood = MusicTags.moods[segment.mood] ?: segment.mood
+                    val start = "%d:%02d".format(segment.startSeconds / 60, segment.startSeconds % 60)
+                    val end = "%d:%02d".format(segment.endSeconds / 60, segment.endSeconds % 60)
+                    "$start–$end  $mood · энергия \${segment.arousal}/100"
+                }
+            }
+        }
+
         liked = tags?.liked ?: 0
         updateLikeButtons()
         likeBtn.setOnClickListener { liked = if (liked > 0) 0 else 1; updateLikeButtons() }
