@@ -107,7 +107,6 @@ class AuraView @JvmOverloads constructor(
         // плюс дрейф по кругу, скорость которого растёт с энергией и ударами
         Color.colorToHSV(baseColor, hsv)
         val moodHue = hsv[0]
-        val tempoHue = lerpHue(235f, 8f, activity.pow(0.8f)) // тихо: синий, громко: красно-оранжевый
         val bpm = target.bpm.coerceIn(40, 220)
         if (PlayerState.playing && bpm > 0) beatPhase = (beatPhase + dt * bpm / 60f) % 1f
         val beatWave = if (PlayerState.playing && bpm > 0) (1f - kotlin.math.cos(beatPhase * 2f * Math.PI.toFloat())) * 0.5f else 0f
