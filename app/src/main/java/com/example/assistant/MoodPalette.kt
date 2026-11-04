@@ -5,7 +5,8 @@ data class Aura(
     val color: Int,
     val brightness: Float,
     val reactivity: Float,
-    val speed: Float
+    val speed: Float,
+    val bpm: Int = 0
 )
 
 /**
@@ -34,7 +35,7 @@ object MoodPalette {
         else Aura(0xFF4A2F8F.toInt(), 0.30f, 0.45f, 0.45f)
 
     /** [scores]: доли настроений (сумма ~100), [arousal] 0..100 (0: неизвестно). */
-    fun from(scores: Map<String, Int>, arousal: Int = 0): Aura {
+    fun from(scores: Map<String, Int>, arousal: Int = 0, bpm: Int = 0): Aura {
         val positive = scores.filterValues { it > 0 }
         if (positive.isEmpty()) return DEFAULT
         // Квадрат веса: побеждает доминирующее настроение, а цвета не смешиваются в грязь
@@ -53,6 +54,6 @@ object MoodPalette {
         }
         val color = (0xFF shl 24) or (r.toInt().coerceIn(0, 255) shl 16) or
             (g.toInt().coerceIn(0, 255) shl 8) or b.toInt().coerceIn(0, 255)
-        return Aura(color, br, re, sp)
+        return Aura(color, br, re, sp, bpm.coerceIn(0, 240))
     }
 }
