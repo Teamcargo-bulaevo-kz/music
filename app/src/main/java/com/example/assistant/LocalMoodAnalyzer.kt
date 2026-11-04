@@ -74,10 +74,12 @@ object LocalMoodAnalyzer {
         val exact = blended.associate { it.first to it.second / sum * 100.0 }
         val scores = exact.mapValues { floor(it.value).toInt() }.toMutableMap()
         exact.entries.sortedByDescending { it.value - floor(it.value) }.take(100 - scores.values.sum()).forEach { scores[it.key] = scores.getValue(it.key) + 1 }
-        val duration = segments.sumOf { (it.endSeconds - it.startSeconds).toDouble() }.coerceAtLeast(1.0)
-        val valence = segments.sumOf { it.valence.toDouble() * (it.endSeconds - it.startSeconds) } / duration
-        val arousal = segments.sumOf { it.arousal.toDouble() * (it.endSeconds - it.startSeconds) } / duration
-        val tension = segments.sumOf { it.tension.toDouble() * (it.endSeconds - it.startSeconds) } / duration
+        // Используем ту же уникальную временную шкалу, что и для moodScores:
+        // перекрывающиеся окна не должны повторно усиливать середину композиции.
+        val duration = weights.sum().coerceAtLeast(1.0)
+        val valence = segments.indices.sumOf { segments[it].valence.toDouble() * weights[it] } / duration
+        val arousal = segments.indices.sumOf { segments[it].arousal.toDouble() * weights[it] } / duration
+        val tension = segments.indices.sumOf { segments[it].tension.toDouble() * weights[it] } / duration
         return whole.copy(scores = scores, valence = valence.roundToInt(), arousal = arousal.roundToInt(), tension = tension.roundToInt(), segments = segments)
     }
     private fun decode(context: Context, uri: Uri, targetRate: Int): FloatArray {
@@ -248,10 +250,16 @@ object LocalMoodAnalyzer {
         val top=raw.values.maxOrNull()?:1.0;val ex=raw.mapValues{kotlin.math.exp((it.value-top)/.24)};val total=ex.values.sum()
         val exact=ex.mapValues{it.value/total*100};val scores=exact.mapValues{floor(it.value).toInt()}.toMutableMap()
         exact.entries.sortedByDescending{it.value-floor(it.value)}.take(100-scores.values.sum()).forEach{scores[it.key]=scores.getValue(it.key)+1}
-        // Это оценка пригодности сигнала, не вероятность правильного распознавания.
-        val durationQuality=u(f.durationSeconds/90.0)
-        val featureQuality=1-u(f.flatness*.65+if(f.rms<.003) .45 else 0.0)
-        val confidence=(25+35*durationQuality+20*u(f.beat*1.8)+20*featureQuality).roundToInt().coerceIn(20,95)
+        // Это качество исходного сигнала и устойчивость измерений, а не вероятность
+        // того, что эмоциональная метка объективно верна.
+        val durationQuality = u(f.durationSeconds / 90.0)
+        val signalQuality = u(f.rms / .035)
+        val spectralQuality = 1.0 - u(f.flatness * .65)
+        val rhythmQuality = u(f.beat * 1.8)
+        val confidence = (
+            15 + 20 * durationQuality + 20 * signalQuality +
+                15 * spectralQuality + 30 * rhythmQuality
+            ).roundToInt().coerceIn(15, 85)
         val level=(1+(energy*4).roundToInt()).coerceIn(1,5)
         val desc=(if(f.bpm>0)f.bpm.toString()+" BPM · " else "")+
             "позитивность "+(valence*100).roundToInt()+"% · возбуждение "+(arousal*100).roundToInt()+"% · напряжение "+(tension*100).roundToInt()+"% · танцевальность "+(danceability*100).roundToInt()+"%"
