@@ -115,12 +115,20 @@ class TrackEditActivity : AppCompatActivity() {
                     "$start–$end  $mood · возбуждение ${segment.arousal}/100"
                 }
                 val transitions = LocalMoodAnalyzer.transitionLabels(segments)
+                val repeats = LocalMoodAnalyzer.findRepeatedFragments(segments)
                 segmentProfile.text = buildString {
                     append("Изменения по ходу трека:\n")
                     append(segmentLines)
                     append("\n\nДинамика:")
                     append(if (transitions.isEmpty()) "\nВыраженных переходов не обнаружено"
                         else "\n" + transitions.joinToString("\n"))
+                    append("\n\nПохожие музыкальные фрагменты:")
+                    append(if (repeats.isEmpty()) "\nНадёжных повторов не найдено"
+                        else "\n" + repeats.joinToString("\n") { repeat ->
+                            val first = "%d:%02d".format(repeat.firstStartSeconds / 60, repeat.firstStartSeconds % 60)
+                            val second = "%d:%02d".format(repeat.secondStartSeconds / 60, repeat.secondStartSeconds % 60)
+                            "$first ↔ $second · сходство ${repeat.similarity}%"
+                        })
                 }
             }
         }
