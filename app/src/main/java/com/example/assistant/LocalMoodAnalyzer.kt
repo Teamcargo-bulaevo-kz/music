@@ -10,6 +10,7 @@ import java.nio.ByteOrder
 import kotlin.math.*
 
 data class MoodAnalysis(val scores: Map<String, Int>, val energy: Int, val bpm: Int, val confidence: Int, val description: String, val valence: Int = 50, val arousal: Int = 50, val tension: Int = 50, val danceability: Int = 0, val segments: List<MoodSegment> = emptyList())
+data class RepeatedFragment(val firstStartSeconds: Int, val secondStartSeconds: Int, val similarity: Int)
 data class AudioFeatures(val rms: Double, val centroid: Double, val low: Double, val high: Double, val flatness: Double, val flux: Double, val beat: Double, val bpm: Int, val dynamics: Double, val count: Int, val durationSeconds: Double = 0.0, val variation: Double = 0.0, val beatAccent: Double = 0.0)
 
 /** Локальный анализ PCM: сеть, Groq и внешние модели не используются. */
@@ -67,6 +68,36 @@ object LocalMoodAnalyzer {
                 else "$time — спад энергии ($delta)"
             }
         }
+    }
+
+    /** Ищет неперекрывающиеся пары окон с похожим музыкальным профилем. */
+    internal fun findRepeatedFragments(segments: List<MoodSegment>, threshold: Double = 0.90): List<RepeatedFragment> {
+        if (segments.size < 3 || threshold !in 0.0..1.0) return emptyList()
+        val matches = ArrayList<RepeatedFragment>()
+        val usedEarlier = HashSet<Int>()
+        for (currentIndex in 2 until segments.size) {
+            val current = segments[currentIndex]
+            var bestIndex = -1
+            var bestSimilarity = 0.0
+            for (previousIndex in 0 until currentIndex - 1) {
+                if (previousIndex in usedEarlier) continue
+                val previous = segments[previousIndex]
+                if (previous.endSeconds > current.startSeconds) continue
+                val keys = (previous.scores.keys + current.scores.keys).toSet()
+                val dot = keys.sumOf { (previous.scores[it] ?: 0).toDouble() * (current.scores[it] ?: 0).toDouble() }
+                val leftNorm = sqrt(keys.sumOf { (previous.scores[it] ?: 0).toDouble().pow(2) })
+                val rightNorm = sqrt(keys.sumOf { (current.scores[it] ?: 0).toDouble().pow(2) })
+                val moodSimilarity = if (leftNorm > 0.0 && rightNorm > 0.0) dot / (leftNorm * rightNorm) else 0.0
+                val scalarSimilarity = listOf(abs(previous.valence - current.valence), abs(previous.arousal - current.arousal), abs(previous.tension - current.tension)).map { 1.0 - it / 100.0 }.average()
+                val similarity = (0.75 * moodSimilarity + 0.25 * scalarSimilarity).coerceIn(0.0, 1.0)
+                if (similarity > bestSimilarity) { bestSimilarity = similarity; bestIndex = previousIndex }
+            }
+            if (bestIndex >= 0 && bestSimilarity >= threshold) {
+                matches += RepeatedFragment(segments[bestIndex].startSeconds, current.startSeconds, (bestSimilarity * 100).roundToInt())
+                usedEarlier += bestIndex
+            }
+        }
+        return matches
     }
 
     /** Вес сегмента — только уникальная часть временной шкалы, без повторного учёта перекрытий. */
