@@ -136,6 +136,22 @@ class LocalMoodAnalyzerTest {
         assertEquals(0.0, LocalMoodAnalyzer.estimateBeatAccent(pulses, 10.0, 0), 0.0)
     }
 
+    @Test fun findsSimilarNonOverlappingMusicalFragments() {
+        val repeated = mapOf("dance" to 70, "energetic" to 30)
+        val different = mapOf("calm" to 80, "focus" to 20)
+        val segments = listOf(
+            MoodSegment(0, 20, "dance", 70, 75, 20, repeated),
+            MoodSegment(10, 30, "calm", 35, 20, 15, different),
+            MoodSegment(20, 40, "dance", 70, 75, 20, repeated),
+            MoodSegment(30, 50, "energetic", 55, 60, 35, mapOf("energetic" to 100))
+        )
+        val matches = LocalMoodAnalyzer.findRepeatedFragments(segments)
+        assertEquals(1, matches.size)
+        assertEquals(0, matches[0].firstStartSeconds)
+        assertEquals(20, matches[0].secondStartSeconds)
+        assertTrue(matches[0].similarity >= 90)
+    }
+
     @Test fun overlappingSegmentsAreWeightedByUniqueTimelineCoverage() {
         val segments = listOf(
             MoodSegment(0, 20, "calm", 50, 20, 10, mapOf("calm" to 100)),
