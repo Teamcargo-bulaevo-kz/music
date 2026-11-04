@@ -32,6 +32,12 @@ class AuraView @JvmOverloads constructor(
     /** Радиус круглой обложки в пикселях: цветной ореол начинается от её края. */
     var coverRadiusPx = 0f
 
+    /** Общая сила свечения: 1 для плеера, меньше для списка, чтобы не мешать читать. */
+    var intensity = 1f
+
+    /** Тонкий светлый ободок у края обложки (нужен только в плеере). */
+    var showRim = true
+
     private var target = MoodPalette.DEFAULT
     private var baseColor = target.color
     private var brightness = target.brightness
@@ -113,7 +119,7 @@ class AuraView @JvmOverloads constructor(
         canvas.drawColor(BG)
         val cx = w / 2f
         val cy = if (centerYPx > 0f) centerYPx else h * 0.40f
-        val gain = AppSettings.auraBrightness / 100f
+        val gain = AppSettings.auraBrightness / 100f * intensity
         val cr = if (coverRadiusPx > 0f) coverRadiusPx else w * 0.25f
 
         // большая амплитуда: радиус от 1.9 до 4.4 радиусов обложки, яркость от 35% до 100%
@@ -141,6 +147,7 @@ class AuraView @JvmOverloads constructor(
         )
         canvas.drawRect(0f, 0f, w, h, paint)
 
+        if (showRim) {
         // тонкий светлый ободок у края обложки
         val rim = ColorUtils.blendARGB(c0, 0xFFFFFFFF.toInt(), 0.35f)
         val ra = (0.45f + 0.50f * bass) * gain
@@ -151,6 +158,7 @@ class AuraView @JvmOverloads constructor(
             floatArrayOf(0f, 0.95f / 1.20f, 1.06f / 1.20f, 1f), Shader.TileMode.CLAMP
         )
         canvas.drawRect(0f, 0f, w, h, paint)
+        }
         paint.shader = null
         if (attached && visibility == VISIBLE && windowVisibility == VISIBLE) postInvalidateDelayed(1000L / AppSettings.fps)
     }
@@ -158,4 +166,10 @@ class AuraView @JvmOverloads constructor(
     private companion object {
         const val BG = 0xFF020206.toInt()
     }
+}
+
+/** Окрашивает свечение по настроению песни (или нейтрально, если песня не размечена). */
+fun AuraView.applyTrack(context: Context, track: MusicTrack?) {
+    val tg = track?.let { MusicTags.get(context, it) }?.takeIf { MusicTags.isTagged(it) }
+    setAura(if (tg == null) MoodPalette.DEFAULT else MoodPalette.from(tg.moodScores.ifEmpty { mapOf(tg.mood to 100) }, tg.arousal))
 }

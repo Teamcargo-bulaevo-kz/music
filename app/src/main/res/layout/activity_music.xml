@@ -4,8 +4,8 @@
     android:layout_width="match_parent" android:layout_height="match_parent"
     android:background="@color/harmonia_bg">
 
-    <com.example.assistant.FlameBackgroundView
-        android:id="@+id/flameBackground"
+    <com.example.assistant.AuraView
+        android:id="@+id/aura"
         android:layout_width="match_parent" android:layout_height="match_parent" />
 
     <LinearLayout
@@ -21,11 +21,7 @@
             android:id="@+id/screenTitle" android:layout_width="0dp" android:layout_height="wrap_content"
             android:ellipsize="end" android:maxLines="1"
             android:layout_weight="1" android:text="Harmonia" android:textColor="@color/harmonia_text"
-            android:textSize="30sp" android:textStyle="bold" />
-        <ImageButton
-            android:id="@+id/shuffleAll" android:layout_width="48dp" android:layout_height="48dp"
-            android:background="@drawable/harmonia_icon_button" android:contentDescription="Вперемешку"
-            android:padding="12dp" android:scaleType="fitCenter" android:src="@drawable/ic_shuffle" android:tint="@color/harmonia_cyan" />
+            android:textSize="24sp" android:textStyle="bold" />
         <ImageButton
             android:id="@+id/moreButton" android:layout_width="48dp" android:layout_height="48dp"
             android:background="@drawable/harmonia_icon_button" android:contentDescription="Ещё"
@@ -45,7 +41,7 @@
         android:id="@+id/tabs" android:layout_width="match_parent" android:layout_height="wrap_content"
         android:layout_marginTop="6dp" android:background="@android:color/transparent"
         app:tabIndicatorColor="@color/harmonia_cyan" app:tabIndicatorFullWidth="false" app:tabIndicatorHeight="3dp"
-        app:tabMode="scrollable" app:tabRippleColor="@null" app:tabTextAppearance="@style/MusicTabText"
+        app:tabMode="fixed" app:tabRippleColor="@null" app:tabTextAppearance="@style/MusicTabText"
         app:tabSelectedTextColor="@color/harmonia_cyan" app:tabTextColor="@color/harmonia_muted" />
 
     <TextView

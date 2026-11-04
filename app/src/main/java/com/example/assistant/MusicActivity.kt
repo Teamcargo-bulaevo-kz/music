@@ -62,11 +62,6 @@ class MusicActivity : AppCompatActivity() {
         "energetic" to "⚡", "calm" to "🌿", "happy" to "😊", "sad" to "🌧", "romantic" to "💗",
         "dance" to "💃", "focus" to "🎧", "epic" to "🔥", "dark" to "🖤"
     )
-    private val genreEmoji = mapOf(
-        "pop" to "🎤", "rock" to "🎸", "hiphop" to "🎙", "electronic" to "🎛", "classical" to "🎻", "jazz" to "🎷",
-        "chanson" to "🎤", "folk" to "🪕", "metal" to "🤘", "rnb" to "💜", "indie" to "🌈", "country" to "🤠",
-        "soundtrack" to "🎬", "reggae" to "🌴", "blues" to "🎺", "other" to "🎵"
-    )
     private var lastMiniId = -1L
     private lateinit var miniCover: android.widget.ImageView
 
@@ -74,8 +69,10 @@ class MusicActivity : AppCompatActivity() {
         NAME("по названию"), ARTIST("по исполнителю"), NEWEST("сначала новые"), OLDEST("сначала старые"), LIKED("любимые сверху")
     }
 
-    private val tabNames = listOf("Треки", "Настроение", "Жанры", "Исполнители", "Папки", "Проверить")
-    private val reviewTab = 5
+    private val tabNames = listOf("Треки", "Подборки", "Исполнители")
+    private var reviewMode = false
+    private lateinit var aura: AuraView
+    private var lastAuraId = -2L
     private var allTracks: List<MusicTrack> = emptyList()
     private var drillTitle: String? = null
     private var drillTracks: List<MusicTrack>? = null
@@ -102,6 +99,7 @@ class MusicActivity : AppCompatActivity() {
     private val ticker = object : Runnable {
         override fun run() {
             updateMini()
+            updateAura()
             updateTaggingState()
             handler.postDelayed(this, 500)
         }
@@ -127,6 +125,13 @@ class MusicActivity : AppCompatActivity() {
         miniArtist = findViewById(R.id.miniArtist)
         miniPlay = findViewById(R.id.miniPlay)
         miniCover = findViewById(R.id.miniCover)
+        aura = findViewById(R.id.aura)
+        aura.intensity = 0.55f
+        aura.showRim = false
+        aura.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
+            aura.centerYPx = v.height * 0.15f
+            aura.coverRadiusPx = 56 * resources.displayMetrics.density
+        }
 
         sort = Sort.values().firstOrNull { it.name == prefs().getString("sort", null) } ?: Sort.NAME
 
@@ -147,7 +152,6 @@ class MusicActivity : AppCompatActivity() {
         })
         search.doAfterTextChanged { rebuild() }
 
-        findViewById<View>(R.id.shuffleAll).setOnClickListener { shuffleAll() }
         findViewById<View>(R.id.moreButton).setOnClickListener { showMainMenu(it) }
         findViewById<View>(R.id.miniInfo).setOnClickListener { openPlayer() }
         mini.setOnClickListener { openPlayer() }
@@ -185,7 +189,16 @@ class MusicActivity : AppCompatActivity() {
         super.onPause()
     }
 
+    private fun updateAura() {
+        val on = AppSettings.listAura
+        aura.visibility = if (on) View.VISIBLE else View.INVISIBLE
+        if (!on) return
+        val id = PlayerState.track?.id ?: -1L
+        if (id != lastAuraId) { lastAuraId = id; aura.applyTrack(this, PlayerState.track) }
+    }
+
     private fun leaveDrill() {
+        reviewMode = false
         drillTracks = null
         drillTitle = null
         drillFolder = null
@@ -258,23 +271,15 @@ class MusicActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------------- главное меню
 
-    private fun shuffleAll() {
-        val pool = allTracks.filter { MusicTags.likedOf(this, it) >= 0 }.ifEmpty { allTracks }
-        if (pool.isEmpty()) return
-        startQueue(pool.shuffled().take(500), 0)
-    }
-
     /** Меню ⋮ наверху: только самое нужное, остальное в настройках. */
     private fun showMainMenu(anchor: View) {
         val menu = PopupMenu(this, anchor)
         menu.menu.add(0, 1, 0, "Сортировка: ${sort.label}")
-        menu.menu.add(0, 9, 1, "Умные подборки")
-        menu.menu.add(0, 10, 2, "Настройки")
+        menu.menu.add(0, 10, 1, "Настройки")
         menu.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> chooseSort()
                 10 -> startActivity(Intent(this, SettingsActivity::class.java))
-                9 -> showSmartPlaylists()
             }
             true
         }
@@ -298,6 +303,12 @@ class MusicActivity : AppCompatActivity() {
     /** Команды из экрана настроек. */
     private fun handleAction(action: String?) {
         when (action) {
+            "review" -> {
+                val r = reviewList()
+                leaveDrill(); reviewMode = true
+                drillTitle = "Проверить"; drillTracks = r
+                search.setText(""); rebuild()
+            }
             "tag" -> runInBackground { MusicTagger.start(this) }
             "redo" -> runInBackground { MusicTagger.start(this, MusicTagger.Mode.REDO) }
             "retry" -> runInBackground { MusicTagger.start(this, MusicTagger.Mode.RETRY) }
@@ -574,20 +585,22 @@ class MusicActivity : AppCompatActivity() {
         }
         val query = TextMatch.normalize(search.text.toString())
         val tab = tabs.selectedTabPosition.coerceAtLeast(0)
-        val review = reviewList()
-        tabs.getTabAt(reviewTab)?.text = if (review.isEmpty()) "Проверить" else "Проверить (${review.size})"
-
         val drill = drillTracks
         screenTitle.text = drillTitle ?: "Harmonia"
         rows = when {
-            drill != null -> trackRows(applyQuery(sortTracks(drill), query))
+            drill != null && reviewMode -> reviewRows(drill)
+            drill != null -> trackListRows(applyQuery(sortTracks(drill), query), query.isEmpty())
             query.isNotEmpty() -> trackRows(applyQuery(sortTracks(allTracks), query))
-            tab == 0 -> trackRows(sortTracks(allTracks))
-            tab == 1 -> groupRows(allTracks.groupBy { MusicTags.get(this, it)?.takeIf { t -> MusicTags.isTagged(t) }?.mood }, MusicTags.moods, moodEmoji, multiMood = true)
-            tab == 2 -> groupRows(allTracks.groupBy { MusicTags.get(this, it)?.takeIf { t -> MusicTags.isTagged(t) }?.genre }, MusicTags.genres, genreEmoji)
-            tab == 3 -> artistRows()
-            tab == 4 -> folderRows()
-            else -> reviewRows(review)
+            tab == 0 -> trackListRows(sortTracks(allTracks), true)
+            tab == 1 -> collectionRows()
+            else -> artistRows()
+        }
+        loadingHint.visibility = if (rows.isEmpty()) View.VISIBLE else View.GONE
+        loadingHint.text = when {
+            query.isNotEmpty() -> "Ничего не найдено"
+            reviewMode -> "Сомнительных песен нет. Вся разметка уверенная."
+            drillTitle == "Понравившиеся" -> "Нажми сердце у песни, и она появится здесь."
+            else -> "Здесь пока пусто"
         }
         updateTaggingState(force = true)
         adapter.notifyDataSetChanged()
@@ -605,9 +618,8 @@ class MusicActivity : AppCompatActivity() {
         val tab = tabs.selectedTabPosition.coerceAtLeast(0)
         val tagged = MusicTags.count(this)
         val parts = ArrayList<String>()
-        if (running) parts.add("⏳ " + MusicTagger.progressText())
-        else if (tagged < allTracks.size && tab in 1..2) parts.add("Размечено $tagged из ${allTracks.size}. Нажми «Разметить», чтобы определить остальные.")
-        if (tab == reviewTab && drillTracks == null) parts.add("Здесь песни, в которых я не уверен. Открой, поправь или нажми «Всё верно».")
+        if (running) parts.add(MusicTagger.progressText())
+        else if (tagged < allTracks.size && tab == 1 && drillTracks == null) parts.add("Размечено $tagged из ${allTracks.size}. Разметка запускается в Настройки.")
         status.visibility = if (parts.isEmpty()) View.GONE else View.VISIBLE
         status.text = parts.joinToString("\n")
     }
@@ -640,6 +652,28 @@ class MusicActivity : AppCompatActivity() {
     private fun trackRows(tracks: List<MusicTrack>): List<Row> =
         tracks.mapIndexed { i, t -> Row(t.title, artistLine(t), t, tags = tagsLine(t)) { startQueue(tracks, i) } }
 
+    /** Список треков; сверху строка «Играть вперемешку», если треков больше одного. */
+    private fun trackListRows(tracks: List<MusicTrack>, withShuffle: Boolean): List<Row> {
+        val list = trackRows(tracks)
+        if (!withShuffle || tracks.size < 2) return list
+        val pool = tracks.filter { MusicTags.likedOf(this, it) >= 0 }.ifEmpty { tracks }
+        val shuffleRow = Row("Играть вперемешку", "${tracks.size} песен", badge = "▶", badgeColor = 0xFF6B5CFF.toInt()) {
+            startQueue(pool.shuffled().take(500), 0)
+        }
+        return listOf(shuffleRow) + list
+    }
+
+    /** Вкладка «Подборки»: понравившиеся, настроения, свои папки и умные подборки в одном списке. */
+    private fun collectionRows(): List<Row> {
+        val liked = allTracks.filter { MusicTags.likedOf(this, it) > 0 }
+        val result = ArrayList<Row>()
+        result.add(Row("Понравившиеся", "${liked.size} песен", badge = "♥", badgeColor = 0xFFE76F9A.toInt()) { openGroup("Понравившиеся", liked) })
+        result += groupRows(allTracks.groupBy { MusicTags.get(this, it)?.takeIf { t -> MusicTags.isTagged(t) }?.mood }, MusicTags.moods, moodEmoji, multiMood = true)
+        result += folderRows()
+        result.add(Row("Умные подборки", "Вечер, работа, тренировка, танцы", badge = "★", badgeColor = 0xFF7C5CFF.toInt()) { showSmartPlaylists() })
+        return result
+    }
+
     private fun groupRows(groups: Map<String?, List<MusicTrack>>, names: Map<String, String>, emoji: Map<String, String>, multiMood: Boolean = false): List<Row> {
         val result = ArrayList<Row>()
         for ((key, label) in names) {
@@ -667,11 +701,11 @@ class MusicActivity : AppCompatActivity() {
     private fun folderRows(): List<Row> {
         val lists = PlaylistStore.load(this)
         val result = ArrayList<Row>()
-        result.add(Row("Новая папка", "Для бега, для прогулки, любая своя", badge = "＋", badgeColor = 0xFF6B5CFF.toInt()) { askFolderName("Новая папка", "") { createFolder(it) } })
         for ((name, tracks) in lists) {
             val resolved = tracks.mapNotNull { p -> allTracks.firstOrNull { it.id == p.id } ?: allTracks.firstOrNull { MusicTags.trackKey(it) == MusicTags.trackKey(p) } }
             result.add(Row(name, "${resolved.size} песен", onLong = { showFolderMenu(it, name) }, badge = "📁", badgeColor = colorFor(name)) { openGroup(name, resolved, folder = name) })
         }
+        result.add(Row("Новая папка", "Своя подборка для бега, прогулки", badge = "＋", badgeColor = 0xFF6B5CFF.toInt()) { askFolderName("Новая папка", "") { createFolder(it) } })
         return result
     }
 
@@ -751,16 +785,12 @@ class MusicActivity : AppCompatActivity() {
         menu.menu.add(0, 1, 0, "Играть следующим")
         menu.menu.add(0, 2, 1, "В конец очереди")
         menu.menu.add(0, 3, 2, if (liked > 0) "Убрать ♥" else "Нравится ♥")
-        menu.menu.add(0, 4, 3, if (liked < 0) "Вернуть в подборки" else "Не нравится")
-        menu.menu.add(0, 5, 4, "Изменить характеристики")
-        menu.menu.add(0, 6, 5, "В папку")
-        if (drillFolder != null) menu.menu.add(0, 7, 6, "Убрать из папки «${drillFolder}»")
+        menu.menu.add(0, 6, 3, "В подборку")
+        if (drillFolder != null) menu.menu.add(0, 7, 4, "Убрать из папки «${drillFolder}»")
         menu.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1, 2 -> enqueue(track, item.itemId == 1)
                 3 -> { MusicTags.setLiked(this, track, if (liked > 0) 0 else 1); rebuild() }
-                4 -> { MusicTags.setLiked(this, track, if (liked < 0) 0 else -1); rebuild() }
-                5 -> openEditor(track)
                 6 -> addToFolder(track)
                 7 -> removeFromCurrentFolder(track)
             }
@@ -905,6 +935,13 @@ class MusicActivity : AppCompatActivity() {
             )
             holder.title.setTextColor(ContextCompat.getColor(ctx, if (playing) R.color.music_accent else R.color.music_text))
             holder.itemView.setOnClickListener { row.onClick() }
+            holder.itemView.setOnTouchListener { v, e ->
+                when (e.actionMasked) {
+                    android.view.MotionEvent.ACTION_DOWN -> v.animate().scaleX(0.98f).scaleY(0.98f).setDuration(90).start()
+                    android.view.MotionEvent.ACTION_UP, android.view.MotionEvent.ACTION_CANCEL -> v.animate().scaleX(1f).scaleY(1f).setDuration(140).start()
+                }
+                false
+            }
             if (track != null) {
                 holder.badge.visibility = View.GONE
                 holder.cover.visibility = View.VISIBLE
