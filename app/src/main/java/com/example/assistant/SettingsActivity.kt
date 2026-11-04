@@ -13,28 +13,38 @@ import android.widget.TextView
 import android.widget.Toast
 import androidx.appcompat.app.AlertDialog
 import androidx.appcompat.app.AppCompatActivity
+import androidx.appcompat.widget.SwitchCompat
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.lifecycleScope
-import androidx.appcompat.widget.SwitchCompat
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
-/** Все настройки в одном месте: основные сверху, продвинутые раскрываются. */
+/**
+ * Настройки: главный экран с разделами. Каждый раздел открывается отдельным окном:
+ * переключатели, дизайн, папки с музыкой, расширенные.
+ */
 class SettingsActivity : AppCompatActivity() {
 
+    companion object {
+        const val EXTRA_SECTION = "section"
+        const val S_SWITCHES = "switches"
+        const val S_DESIGN = "design"
+        const val S_FOLDERS = "folders"
+        const val S_ADVANCED = "advanced"
+    }
+
     private lateinit var root: LinearLayout
-    private lateinit var statusText: TextView
-    private lateinit var rhythmStatus: TextView
-    private lateinit var foldersBox: LinearLayout
+    private var statusText: TextView? = null
+    private var rhythmStatus: TextView? = null
+    private val section: String? by lazy { intent.getStringExtra(EXTRA_SECTION) }
     private val dp get() = resources.displayMetrics.density
     private fun px(v: Int) = (v * dp).toInt()
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         edgeToEdge()
-        title = "Настройки"
         val scroll = ScrollView(this).apply { setBackgroundResource(R.drawable.harmonia_background) }
         root = LinearLayout(this).apply {
             orientation = LinearLayout.VERTICAL
@@ -43,7 +53,13 @@ class SettingsActivity : AppCompatActivity() {
         scroll.addView(root)
         setContentView(scroll)
         root.padForSystemBars()
-        build()
+        when (section) {
+            S_SWITCHES -> buildSwitches()
+            S_DESIGN -> buildDesign()
+            S_FOLDERS -> buildFolders()
+            S_ADVANCED -> buildAdvanced()
+            else -> buildHome()
+        }
     }
 
     override fun onResume() {
@@ -51,50 +67,73 @@ class SettingsActivity : AppCompatActivity() {
         refreshStatus()
     }
 
-    // ---------- Построение экрана ----------
+    // ---------- Экраны ----------
 
-    private fun build() {
-        root.removeAllViews()
+    private fun buildHome() {
         header("Настройки", big = true)
         statusText = text("", 13f, R.color.harmonia_muted).also { root.addView(it) }
-        rhythmStatus = TextView(this) // обновляется в refreshStatus
+        navRow("Переключатели", "Свечение, перемотка, оценки") { open(S_SWITCHES) }
+        navRow("Дизайн", "Яркость, размеры обложки, текста и кнопок") { open(S_DESIGN) }
+        navRow("Папки с музыкой", "Какие папки показывать и сканировать") { open(S_FOLDERS) }
+        navRow("Расширенные", "Ритм, разметка, обмен с ИИ, отладка, сброс") { open(S_ADVANCED) }
+        section("Музыка")
+        actionRow("Разметить музыку", "Определить настроение и ритм новых песен на телефоне") { runInMain("tag") }
+        section("О приложении")
+        text("Harmonia ${BuildConfig.VERSION_NAME} · ${BuildConfig.BUILD_TAG}", 13f, R.color.harmonia_muted).also { root.addView(it) }
+    }
 
-        section("Вид плеера")
-        switchRow("Свечение за обложкой", "Цвет зависит от настроения песни, пульс идёт в такт", AppSettings.auraEnabled) { AppSettings.auraEnabled = it }
+    private fun buildSwitches() {
+        header("Переключатели", big = true)
+        switchRow("Свечение в плеере", "Цвет зависит от настроения песни, пульс идёт в такт", AppSettings.auraEnabled) { AppSettings.auraEnabled = it }
+        switchRow("Свечение в списке", "Мягкий цветной фон под списком песен", AppSettings.listAura) { AppSettings.listAura = it }
+        switchRow("Полоса перемотки", "Показывать время и перемотку в плеере", AppSettings.showSeek) { AppSettings.showSeek = it }
+        switchRow("Нравится и не нравится", "Кнопки оценки в плеере, по ним строятся подборки", AppSettings.showRating) { AppSettings.showRating = it }
+    }
+
+    private fun buildDesign() {
+        header("Дизайн", big = true)
+        section("Плеер")
         sliderRow("Яркость свечения", 30, 100, 10, AppSettings.auraBrightness, "%") { AppSettings.auraBrightness = it }
         choiceRow("Размер обложки", listOf("Маленькая", "Средняя", "Большая"), { AppSettings.coverSize }) { AppSettings.coverSize = it }
         choiceRow("Размер названия", listOf("Мелкий", "Обычный", "Крупный"), { AppSettings.textSize }) { AppSettings.textSize = it }
-
-        section("Кнопки плеера")
         choiceRow("Размер кнопок", listOf("Маленькие", "Обычные", "Крупные"), { AppSettings.buttonSize }) { AppSettings.buttonSize = it }
-        switchRow("Полоса перемотки", "Показывать время и перемотку", AppSettings.showSeek) { AppSettings.showSeek = it }
-        switchRow("Нравится и не нравится", "Две кнопки оценки, по ним строятся подборки", AppSettings.showRating) { AppSettings.showRating = it }
+    }
 
-        section("Папки с музыкой")
+    private fun buildFolders() {
+        header("Папки с музыкой", big = true)
         text("Выключенные папки не показываются в списке и не сканируются.", 13f, R.color.harmonia_muted).also { root.addView(it) }
-        foldersBox = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
-        root.addView(foldersBox)
-        loadFolders()
-
-        section("Разметка музыки")
-        text("Настроение и ритм определяются на телефоне, песни никуда не отправляются.", 13f, R.color.harmonia_muted).also { root.addView(it) }
-        actionRow("Разметить музыку", "Проанализировать новые песни") { runInMain("tag") }
-
-        // Продвинутые
-        val advanced = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL; visibility = View.GONE }
-        val toggleTitle = TextView(this).apply {
-            text = "Продвинутые настройки  ▾"; textSize = 16f; setTextColor(getColor(R.color.harmonia_text))
+        val box = LinearLayout(this).apply { orientation = LinearLayout.VERTICAL }
+        lifecycleScope.launch {
+            val folders = withContext(Dispatchers.IO) { MusicLibrary.folders(this@SettingsActivity) }
+            if (folders.isEmpty()) {
+                box.addView(text("Папки не найдены. Проверь доступ к музыке в настройках телефона.", 13f, R.color.harmonia_muted))
+                return@launch
+            }
+            val primary = android.os.Environment.getExternalStorageDirectory().path
+            val all = folders.map { it.first }
+            val total = folders.sumOf { it.second }
+            statusLine("Папок: ${folders.size} · песен: $total")
+            box.addView(actionRowView("Включить все", null) {
+                AppSettings.disabledFolders = emptySet(); MusicLibrary.invalidate(); recreate()
+            })
+            box.addView(actionRowView("Выключить все", null) {
+                AppSettings.disabledFolders = all.toSet(); MusicLibrary.invalidate(); recreate()
+            })
+            folders.forEach { (dir, count) ->
+                val shown = dir.removePrefix(primary).trimStart('/').ifEmpty { "Корень памяти" }
+                box.addView(switchView(shown, "$count песен", AppSettings.isFolderEnabled(dir)) { on ->
+                    AppSettings.disabledFolders = if (on) AppSettings.disabledFolders - dir else AppSettings.disabledFolders + dir
+                    MusicLibrary.invalidate()
+                })
+            }
         }
-        val toggle = LinearLayout(this).apply { setPadding(0, px(12), 0, px(12)); addView(toggleTitle) }
-        toggle.setOnClickListener {
-            val open = advanced.visibility != View.VISIBLE
-            advanced.visibility = if (open) View.VISIBLE else View.GONE
-            toggleTitle.text = if (open) "Продвинутые настройки  ▴" else "Продвинутые настройки  ▾"
-        }
-        root.addView(toggle, lp(top = 24))
-        root.addView(advanced)
-        val outer = root
-        root = advanced
+        root.addView(box)
+    }
+
+    private fun statusLine(t: String) { root.addView(text(t, 13f, R.color.harmonia_cyan), 2) }
+
+    private fun buildAdvanced() {
+        header("Расширенные", big = true)
 
         section("Ритм")
         rhythmStatus = text("", 13f, R.color.harmonia_muted).also { root.addView(it) }
@@ -102,11 +141,8 @@ class SettingsActivity : AppCompatActivity() {
         sliderRow("Чувствительность к ритму", 50, 150, 10, AppSettings.beatSensitivity, "%") { AppSettings.beatSensitivity = it }
         choiceRow("Частота кадров фона", listOf("20", "30", "60"), { listOf(20, 30, 60).indexOf(AppSettings.fps).coerceAtLeast(1) }) { AppSettings.fps = listOf(20, 30, 60)[it] }
 
-        section("Отладка")
-        switchRow("Отладочный вид плеера", "Показать спектр, карту настроения, строку характеристик, вперемешку и повтор", AppSettings.debugView) { AppSettings.debugView = it }
-        if (BuildConfig.DEBUG) actionRow("Размер окна", "Для поиска проблем с версткой") { runInMain("window") }
-
-        section("Разметка: дополнительно")
+        section("Разметка")
+        actionRow("Проверить сомнительные песни", "Песни, в которых разметка не уверена") { runInMain("review") }
         actionRow("Разметить заново", "Автоматическая разметка сотрётся, ручные правки сохранятся") { confirmRedo() }
         actionRow("Повторить неопознанные", null) { runInMain("retry") }
         actionRow("Выбрать файл с разметкой", "Загрузить готовую таблицу") { runInMain("pick") }
@@ -116,50 +152,31 @@ class SettingsActivity : AppCompatActivity() {
         actionRow("Вставить ответ другого ИИ", null) { runInMain("paste") }
         actionRow("Поделиться таблицей Музыка.xlsx", null) { runInMain("share") }
 
+        section("Отладка")
+        switchRow("Отладочный вид плеера", "Показать спектр, карту настроения, строку характеристик, вперемешку и повтор", AppSettings.debugView) { AppSettings.debugView = it }
+        if (BuildConfig.DEBUG) actionRow("Размер окна", "Для поиска проблем с версткой") { runInMain("window") }
+
         section("Сброс")
         actionRow("Сбросить настройки вида", "Папки, размеры и свечение вернутся к исходным") {
             AlertDialog.Builder(this).setTitle("Сбросить настройки?")
-                .setPositiveButton("Сбросить") { _, _ -> AppSettings.resetAll(); MusicLibrary.invalidate(); build(); refreshStatus() }
+                .setPositiveButton("Сбросить") { _, _ -> AppSettings.resetAll(); MusicLibrary.invalidate(); recreate() }
                 .setNegativeButton("Отмена", null).show()
         }
-        root = outer
-        section("О приложении")
-        text("Harmonia ${BuildConfig.VERSION_NAME} · ${BuildConfig.BUILD_TAG}", 13f, R.color.harmonia_muted).also { root.addView(it) }
     }
 
-    // ---------- Статус и папки ----------
+    // ---------- Статус ----------
 
     private fun refreshStatus() {
-        if (!::statusText.isInitialized) return
         val granted = ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         val rhythm = if (granted) "доступ к ритму есть" else "доступа к ритму нет, фон пульсирует условно"
-        rhythmStatus.text = "Сейчас: $rhythm"
+        rhythmStatus?.text = "Сейчас: $rhythm"
+        val st = statusText ?: return
         lifecycleScope.launch {
             val (total, tagged) = withContext(Dispatchers.IO) {
                 val music = MusicLibrary.index(this@SettingsActivity).allMusic()
                 music.size to music.count { t -> MusicTags.get(this@SettingsActivity, t)?.let { MusicTags.isTagged(it) } == true }
             }
-            statusText.text = "Песен: $total · размечено: $tagged · $rhythm"
-        }
-    }
-
-    private fun loadFolders() {
-        foldersBox.removeAllViews()
-        lifecycleScope.launch {
-            val folders = withContext(Dispatchers.IO) { MusicLibrary.folders(this@SettingsActivity) }
-            if (folders.isEmpty()) {
-                foldersBox.addView(text("Папки не найдены. Проверь доступ к музыке в настройках телефона.", 13f, R.color.harmonia_muted))
-                return@launch
-            }
-            val primary = android.os.Environment.getExternalStorageDirectory().path
-            folders.forEach { (dir, count) ->
-                val shown = dir.removePrefix(primary).ifEmpty { "/" }.trimStart('/').ifEmpty { "Корень памяти" }
-                val sw = switchView(shown, "$count песен", AppSettings.isFolderEnabled(dir)) { on ->
-                    AppSettings.disabledFolders = if (on) AppSettings.disabledFolders - dir else AppSettings.disabledFolders + dir
-                    MusicLibrary.invalidate()
-                }
-                foldersBox.addView(sw)
-            }
+            st.text = "Песен: $total · размечено: $tagged · $rhythm"
         }
     }
 
@@ -183,6 +200,10 @@ class SettingsActivity : AppCompatActivity() {
             .setNegativeButton("Отмена", null).show()
     }
 
+    private fun open(sectionName: String) {
+        startActivity(Intent(this, SettingsActivity::class.java).putExtra(EXTRA_SECTION, sectionName))
+    }
+
     /** Действия живут в главном экране: открываем его с командой. */
     private fun runInMain(action: String) {
         startActivity(Intent(this, MusicActivity::class.java).putExtra(MusicActivity.EXTRA_ACTION, action)
@@ -200,7 +221,7 @@ class SettingsActivity : AppCompatActivity() {
     private fun header(t: String, big: Boolean = false) {
         root.addView(TextView(this).apply {
             text = t; textSize = if (big) 26f else 14f; setTextColor(getColor(R.color.harmonia_text))
-            setTypeface(typeface, android.graphics.Typeface.BOLD)
+            setTypeface(typeface, android.graphics.Typeface.BOLD); setPadding(0, 0, 0, px(8))
         }, lp())
     }
 
@@ -243,6 +264,14 @@ class SettingsActivity : AppCompatActivity() {
 
     private fun actionRow(title: String, subtitle: String?, click: () -> Unit) {
         root.addView(actionRowView(title, subtitle, click))
+    }
+
+    /** Строка перехода в раздел со стрелкой справа. */
+    private fun navRow(title: String, subtitle: String, click: () -> Unit) {
+        val row = actionRowView(title, subtitle, click)
+        row.addView(TextView(this).apply { text = "›"; textSize = 24f; setTextColor(getColor(R.color.harmonia_muted)) })
+        row.setPadding(0, px(14), 0, px(14))
+        root.addView(row)
     }
 
     private fun choiceRow(title: String, options: List<String>, get: () -> Int, set: (Int) -> Unit) {

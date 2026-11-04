@@ -40,6 +40,11 @@ object AppSettings {
         get() = if (ready()) sp.getInt("text_size", 1).coerceIn(0, 2) else 1
         set(v) = sp.edit().putInt("text_size", v.coerceIn(0, 2)).apply()
 
+    /** Живое свечение на фоне списка песен. */
+    var listAura: Boolean
+        get() = !ready() || sp.getBoolean("list_aura", true)
+        set(v) = sp.edit().putBoolean("list_aura", v).apply()
+
     var showSeek: Boolean
         get() = !ready() || sp.getBoolean("show_seek", true)
         set(v) = sp.edit().putBoolean("show_seek", v).apply()
