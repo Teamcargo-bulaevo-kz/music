@@ -40,6 +40,10 @@ import kotlinx.coroutines.withContext
 
 /** Второе приложение «Музыка»: вся музыка телефона, настроения, жанры, исполнители, папки, проверка разметки и мини-плеер. */
 class MusicActivity : AppCompatActivity() {
+    companion object {
+        const val EXTRA_ACTION = "do"
+    }
+
 
     /** Строка списка: трек или группа (настроение, жанр, исполнитель, папка). */
     private data class Row(
@@ -167,8 +171,13 @@ class MusicActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         handler.post(ticker)
-        if (allTracks.isNotEmpty()) rebuild()
+        if (AppSettings.disabledFolders != foldersSeen) {
+            foldersSeen = AppSettings.disabledFolders
+            if (allTracks.isNotEmpty()) loadLibrary()
+        } else if (allTracks.isNotEmpty()) rebuild()
     }
+
+    private var foldersSeen: Set<String> = emptySet()
 
     override fun onPause() {
         handler.removeCallbacks(ticker)
@@ -228,6 +237,7 @@ class MusicActivity : AppCompatActivity() {
     }
 
     private fun loadLibrary() {
+        foldersSeen = AppSettings.disabledFolders
         loadingHint.visibility = View.VISIBLE
         loadingHint.text = "Загружаю музыку…"
         lifecycleScope.launch {
@@ -253,38 +263,42 @@ class MusicActivity : AppCompatActivity() {
         startQueue(pool.shuffled().take(500), 0)
     }
 
-    /** Меню ⋮ наверху: разметка, сортировка и работа с другими ИИ. */
+    /** Меню ⋮ наверху: только самое нужное, остальное в настройках. */
     private fun showMainMenu(anchor: View) {
         val menu = PopupMenu(this, anchor)
         menu.menu.add(0, 1, 0, "Сортировка: ${sort.label}")
-        menu.menu.add(0, 2, 1, "Разметить музыку")
-        menu.menu.add(0, 3, 2, "Отправить песни другому ИИ")
-        menu.menu.add(0, 4, 3, "Вставить ответ другого ИИ")
-        menu.menu.add(0, 5, 4, "Поделиться таблицей Музыка.xlsx")
-        menu.menu.add(0, 6, 5, "Выбрать файл с разметкой…")
-        menu.menu.add(0, 7, 6, "Разметить заново (правки сохранятся)")
-        menu.menu.add(0, 8, 7, "Повторить неопознанные")
-        menu.menu.add(0, 9, 8, "Умные подборки")
-        if (BuildConfig.DEBUG) menu.menu.add(0, 99, 9, "Размер окна (для отладки)")
+        menu.menu.add(0, 9, 1, "Умные подборки")
+        menu.menu.add(0, 10, 2, "Настройки")
         menu.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1 -> chooseSort()
-                2 -> runInBackground { MusicTagger.start(this) }
-                3 -> sendToOtherAi()
-                4 -> pasteAiAnswer()
-                6 -> pickTableLauncher.launch("*/*")
-                7 -> AlertDialog.Builder(this).setTitle("Разметить заново?")
-                    .setMessage("Автоматическая разметка сотрётся и ИИ сделает её снова. Твои ручные правки и оценки сохранятся. Это тратит лимит ИИ.")
-                    .setPositiveButton("Разметить") { _, _ -> runInBackground { MusicTagger.start(this, MusicTagger.Mode.REDO) } }
-                    .setNegativeButton("Отмена", null).show()
-                8 -> runInBackground { MusicTagger.start(this, MusicTagger.Mode.RETRY) }
+                10 -> startActivity(Intent(this, SettingsActivity::class.java))
                 9 -> showSmartPlaylists()
-                5 -> shareTable()
-                99 -> showWindowInfo()
             }
             true
         }
         menu.show()
+    }
+
+    /** Команды из экрана настроек. */
+    private fun handleAction(action: String?) {
+        when (action) {
+            "tag" -> runInBackground { MusicTagger.start(this) }
+            "redo" -> runInBackground { MusicTagger.start(this, MusicTagger.Mode.REDO) }
+            "retry" -> runInBackground { MusicTagger.start(this, MusicTagger.Mode.RETRY) }
+            "send" -> sendToOtherAi()
+            "paste" -> pasteAiAnswer()
+            "share" -> shareTable()
+            "pick" -> pickTableLauncher.launch("*/*")
+            "window" -> showWindowInfo()
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        handleAction(intent.getStringExtra(EXTRA_ACTION))
+        intent.removeExtra(EXTRA_ACTION)
     }
 
     /** Подборки строятся из рассчитанных признаков; анализ и запуск музыки не вызываются. */

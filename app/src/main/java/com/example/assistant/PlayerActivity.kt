@@ -24,6 +24,11 @@ import kotlinx.coroutines.withContext
 class PlayerActivity : AppCompatActivity() {
 
     private lateinit var aura: AuraView
+    private lateinit var spectrum: SpectrumGlowView
+    private lateinit var moodProfile: MoodProfileView
+    private lateinit var tags: TextView
+    private lateinit var shuffle: ImageButton
+    private lateinit var repeat: ImageButton
     private val handler = Handler(Looper.getMainLooper())
     private var userSeeking = false
     private var shownTrackId = -1L
@@ -51,6 +56,13 @@ class PlayerActivity : AppCompatActivity() {
         setContentView(R.layout.activity_player)
         findViewById<View>(R.id.content).padForSystemBars()
         aura = findViewById(R.id.aura)
+        spectrum = findViewById(R.id.spectrum)
+        moodProfile = findViewById(R.id.moodProfile)
+        tags = findViewById(R.id.tags)
+        shuffle = findViewById(R.id.shuffle)
+        repeat = findViewById(R.id.repeat)
+        shuffle.setOnClickListener { pulse(it); MusicService.instance?.toggleShuffle() }
+        repeat.setOnClickListener { pulse(it); MusicService.instance?.cycleRepeat() }
         cover = findViewById(R.id.cover)
         title = findViewById(R.id.title)
         artist = findViewById(R.id.artist)
@@ -62,7 +74,7 @@ class PlayerActivity : AppCompatActivity() {
         // Обложка небольшая и по центру, вокруг много воздуха
         val coverBox = findViewById<android.view.View>(R.id.coverBox)
         coverBox.addOnLayoutChangeListener { v, l, t, r, b, _, _, _, _ ->
-            val side = (minOf(r - l - v.paddingLeft - v.paddingRight, b - t) * 0.8f).toInt().coerceAtMost((260 * resources.displayMetrics.density).toInt())
+            val side = (minOf(r - l - v.paddingLeft - v.paddingRight, b - t) * AppSettings.coverFactor).toInt().coerceAtMost((260 * resources.displayMetrics.density).toInt())
             val lp = cover.layoutParams as android.widget.FrameLayout.LayoutParams
             if (side > 0 && (lp.width != side || lp.height != side)) {
                 lp.width = side; lp.height = side; lp.gravity = android.view.Gravity.CENTER
@@ -93,11 +105,30 @@ class PlayerActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         shownTrackId = -1L // характеристики могли поменять в редакторе
+        applySettings()
         // Спектр приходит от общего анализатора звука; разрешение просит главный экран с пояснением
         if (!BeatSource.isLive && ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             BeatSource.attach(MusicService.instance?.audioSessionId ?: 0)
         }
+        BeatSource.fftListener = if (AppSettings.debugView) { data -> spectrum.setFftData(data) } else null
         handler.post(ticker)
+    }
+
+    /** Применяет настройки вида: размеры, видимость элементов, отладочный вид. */
+    private fun applySettings() {
+        val debug = AppSettings.debugView
+        aura.visibility = if (AppSettings.auraEnabled) View.VISIBLE else View.INVISIBLE
+        title.textSize = AppSettings.titleSp
+        findViewById<View>(R.id.seek).visibility = if (AppSettings.showSeek) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.timeRow).visibility = if (AppSettings.showSeek) View.VISIBLE else View.GONE
+        likeButton.visibility = if (AppSettings.showRating) View.VISIBLE else View.GONE
+        dislikeButton.visibility = if (AppSettings.showRating) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.buttonRow).apply { scaleX = AppSettings.buttonScale; scaleY = AppSettings.buttonScale }
+        spectrum.visibility = if (debug) View.VISIBLE else View.GONE
+        tags.visibility = if (debug) View.VISIBLE else View.GONE
+        findViewById<View>(R.id.debugButtons).visibility = if (debug) View.VISIBLE else View.GONE
+        if (!debug) moodProfile.visibility = View.GONE
+        findViewById<View>(R.id.coverBox).requestLayout()
     }
 
     override fun finish() {
@@ -107,6 +138,8 @@ class PlayerActivity : AppCompatActivity() {
 
     override fun onPause() {
         handler.removeCallbacks(ticker)
+        BeatSource.fftListener = null
+        spectrum.setFftData(null)
         super.onPause()
     }
 
@@ -136,11 +169,16 @@ class PlayerActivity : AppCompatActivity() {
                 .setInterpolator(android.view.animation.DecelerateInterpolator()).start()
             CoverLoader.load(lifecycleScope, this, track, cover, 800)
             val tagged = MusicTags.get(this, track)?.takeIf { MusicTags.isTagged(it) }
+            moodProfile.setScores(tagged?.moodScores.orEmpty())
+            moodProfile.visibility = if (AppSettings.debugView && tagged?.moodScores?.isNotEmpty() == true) View.VISIBLE else View.GONE
+            tags.text = tagged?.let { trackSummary(it, "\n") }.orEmpty()
             aura.setAura(if (tagged == null) MoodPalette.DEFAULT else MoodPalette.from(
                 tagged.moodScores.ifEmpty { mapOf(tagged.mood to 100) }, tagged.arousal))
         }
         showRating(MusicTags.likedOf(this, track))
         play.setImageResource(if (PlayerState.playing) R.drawable.ic_pause else R.drawable.ic_play)
+        shuffle.alpha = if (PlayerState.shuffle) 1f else 0.4f
+        repeat.alpha = if (PlayerState.repeat == PlayerState.REPEAT_OFF) 0.4f else 1f
         val duration = PlayerState.durationMs
         seek.max = if (duration > 0) duration else 1
         if (!userSeeking) {
@@ -180,7 +218,8 @@ class PlayerActivity : AppCompatActivity() {
     /** Всё остальное спрятано в меню ⋮, чтобы внизу не было лишних кнопок. */
     private fun showMore(anchor: android.view.View) {
         val menu = android.widget.PopupMenu(this, anchor)
-        menu.menu.add(0, 1, 0, "Характеристики")
+        menu.menu.add(0, 8, 0, "О треке")
+        menu.menu.add(0, 1, 0, "Изменить характеристики")
         menu.menu.add(0, 5, 1, "Карта настроения по фрагментам")
         menu.menu.add(0, 2, 2, "Очередь")
         menu.menu.add(0, 3, 3, "Ещё такое")
@@ -196,6 +235,7 @@ class PlayerActivity : AppCompatActivity() {
                 1 -> PlayerState.track?.let {
                     startActivity(Intent(this, TrackEditActivity::class.java).putExtra(TrackEditActivity.EXTRA_TRACK_ID, it.id))
                 }
+                8 -> showTrackInfo()
                 5 -> showMoodTimeline()
                 2 -> showQueue()
                 3 -> playSimilar()
@@ -206,6 +246,39 @@ class PlayerActivity : AppCompatActivity() {
             true
         }
         menu.show()
+    }
+
+    /** Строка характеристик: настроение, ритм, энергия, танцевальность, точность. */
+    private fun trackSummary(it: TrackTags, sep: String): String {
+        val mood = it.moodScores.entries.sortedByDescending { e -> e.value }.take(2)
+            .joinToString(" · ") { e -> "${MusicTags.moodShort[e.key] ?: e.key} ${e.value}%" }
+        val rhythm = if (it.bpm > 0) "${it.bpm} BPM" else "ритм не определён"
+        val dance = if (it.danceability > 0) " · танцевальность ${it.danceability}%" else ""
+        return "$mood$sep$rhythm · энергия ${it.energy * 20}%$dance · точность оценки ${it.confidence}%"
+    }
+
+    /** «О треке»: всё, что известно о песне, одним окном. */
+    private fun showTrackInfo() {
+        val track = PlayerState.track ?: return
+        val tg = MusicTags.get(this, track)?.takeIf { MusicTags.isTagged(it) }
+        val sb = StringBuilder()
+        sb.append("Название: ${track.title}\n")
+        sb.append("Исполнитель: ${track.artist.ifBlank { "неизвестен" }}\n")
+        if (track.album.isNotBlank()) sb.append("Альбом: ${track.album}\n")
+        sb.append("Длительность: ${PlayerState.formatTime(PlayerState.durationMs)}\n")
+        if (track.path.isNotBlank()) sb.append("Файл: ${track.path}\n")
+        if (tg == null) {
+            sb.append("\nПесня ещё не размечена: настроение и ритм появятся после анализа (Настройки → Разметка).")
+        } else {
+            sb.append("\nЖанр: ${tg.genreText}\n")
+            sb.append("Настроение: ${tg.moodScores.entries.sortedByDescending { it.value }.take(3).joinToString(", ") { (MusicTags.moodShort[it.key] ?: it.key) + " " + it.value + "%" }}\n")
+            sb.append("Ритм: ${if (tg.bpm > 0) "${tg.bpm} BPM" else "не определён"}\n")
+            sb.append("Энергия: ${tg.energy * 20}% · танцевальность: ${tg.danceability}%\n")
+            sb.append("Позитивность: ${tg.valence}% · возбуждение: ${tg.arousal}% · напряжение: ${tg.tension}%\n")
+            sb.append("Точность оценки: ${tg.confidence}%")
+        }
+        AlertDialog.Builder(this).setTitle("О треке").setMessage(sb.toString())
+            .setPositiveButton("Закрыть", null).show()
     }
 
     private fun showMoodTimeline() {

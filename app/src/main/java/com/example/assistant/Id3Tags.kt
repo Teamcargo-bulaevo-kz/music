@@ -8,7 +8,7 @@ data class Id3Text(val title: String = "", val artist: String = "", val album: S
 /**
  * Свой разбор ID3v2 (v2.2/2.3/2.4). Системный сканер Android иногда теряет старший байт
  * у кириллицы в UTF-16 и показывает вместо слов «5=8 >B ?0;L<». Здесь тег читается сам.
- * Чистый Kotlin, без Android — проверяется обычными тестами.
+ * Чистый Kotlin, без Android: проверяется обычными тестами.
  */
 object Id3Tags {
 
@@ -68,7 +68,7 @@ object Id3Tags {
             3 -> String(d, off, len, Charsets.UTF_8)
             else -> String(d, off, len, latin1)
         }
-        // несколько значений разделены нулём — берём первое
+        // несколько значений разделены нулём: берём первое
         return raw.substringBefore('\u0000').trim()
     }
 
@@ -114,7 +114,7 @@ object Id3Tags {
         return between >= 2
     }
 
-    /** Чинит cp1251, прочитанную как Latin-1. Если не вышло — возвращает исходную строку. */
+    /** Чинит cp1251, прочитанную как Latin-1. Если не вышло: возвращает исходную строку. */
     fun repairLatin1(s: String): String {
         if (s.any { it.code > 0xFF }) return s
         val fixed = String(s.toByteArray(latin1), cp1251)

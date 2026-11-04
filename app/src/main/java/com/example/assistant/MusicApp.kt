@@ -6,5 +6,6 @@ class MusicApp : Application() {
     override fun onCreate() {
         super.onCreate()
         MusicFiles.init(this)
+        AppSettings.init(this)
     }
 }

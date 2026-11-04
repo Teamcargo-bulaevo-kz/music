@@ -38,11 +38,23 @@
             android:layout_marginTop="6dp" android:alpha="0.7" android:ellipsize="end" android:gravity="center" android:maxLines="1"
             android:textColor="@color/harmonia_muted" android:textSize="14sp" />
 
+        <TextView
+            android:id="@+id/tags" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="6dp" android:gravity="center" android:textColor="@color/harmonia_cyan"
+            android:textSize="12sp" android:visibility="gone" />
+        <com.example.assistant.MoodProfileView
+            android:id="@+id/moodProfile" android:layout_width="match_parent" android:layout_height="80dp"
+            android:layout_marginTop="4dp" android:visibility="gone" />
+        <com.example.assistant.SpectrumGlowView
+            android:id="@+id/spectrum" android:layout_width="match_parent" android:layout_height="120dp"
+            android:visibility="gone" />
+
         <SeekBar
             android:id="@+id/seek" android:layout_width="match_parent" android:layout_height="wrap_content"
             android:layout_marginTop="40dp" android:progressTint="#CCFFFFFF" android:thumbTint="#FFFFFFFF"
             android:progressBackgroundTint="#33FFFFFF" />
         <LinearLayout
+            android:id="@+id/timeRow"
             android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal"
             android:paddingStart="4dp" android:paddingEnd="4dp">
             <TextView
@@ -54,6 +66,22 @@
         </LinearLayout>
 
         <LinearLayout
+            android:id="@+id/debugButtons"
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="12dp"
+            android:gravity="center" android:orientation="horizontal" android:visibility="gone">
+            <ImageButton
+                android:id="@+id/shuffle" android:layout_width="44dp" android:layout_height="44dp"
+                android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Вперемешку"
+                android:padding="12dp" android:scaleType="fitCenter" android:src="@drawable/ic_shuffle" />
+            <ImageButton
+                android:id="@+id/repeat" android:layout_width="44dp" android:layout_height="44dp"
+                android:layout_marginStart="24dp"
+                android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Повтор"
+                android:padding="12dp" android:scaleType="fitCenter" android:src="@drawable/ic_repeat" />
+        </LinearLayout>
+
+        <LinearLayout
+            android:id="@+id/buttonRow"
             android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="28dp"
             android:gravity="center" android:orientation="horizontal">
             <ImageButton

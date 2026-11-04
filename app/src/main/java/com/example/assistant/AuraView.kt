@@ -21,7 +21,7 @@ class AuraView @JvmOverloads constructor(
     attrs: AttributeSet? = null,
 ) : View(context, attrs) {
 
-    /** Где центр свечения по высоте (0..1) — примерно за обложкой. */
+    /** Где центр свечения по высоте (0..1): примерно за обложкой. */
     var centerY = 0.40f
 
     private var target = MoodPalette.DEFAULT
@@ -59,8 +59,9 @@ class AuraView @JvmOverloads constructor(
         speed += (target.speed - speed) * k
         phase += dt * speed
 
-        val beat = BeatSource.bass * reactivity
-        val level = BeatSource.level * reactivity
+        val sens = AppSettings.beatSensitivity / 100f
+        val beat = (BeatSource.bass * reactivity * sens).coerceAtMost(1f)
+        val level = (BeatSource.level * reactivity * sens).coerceAtMost(1f)
         pulse = if (beat > pulse) pulse + (beat - pulse) * 0.7f else pulse * 0.90f + beat * 0.10f
 
         val w = width.toFloat(); val h = height.toFloat()
@@ -70,7 +71,8 @@ class AuraView @JvmOverloads constructor(
         val base = max(w, h * 0.6f)
         // внешнее мягкое свечение: затухает к краям
         val outerR = base * (0.62f + 0.10f * sin(phase) + 0.22f * pulse)
-        val outerA = (0.16f + 0.40f * brightness * (0.55f + 0.45f * level) + 0.18f * pulse).coerceIn(0f, 0.85f)
+        val gain = AppSettings.auraBrightness / 100f
+        val outerA = gain * (0.16f + 0.40f * brightness * (0.55f + 0.45f * level) + 0.18f * pulse).coerceIn(0f, 0.85f)
         paint.shader = RadialGradient(
             cx, cy, outerR,
             intArrayOf(ColorUtils.setAlphaComponent(color, (outerA * 255).toInt()),
@@ -81,7 +83,7 @@ class AuraView @JvmOverloads constructor(
         // ядро: ярче и светлее, бьётся в такт
         val coreR = base * (0.24f + 0.16f * pulse)
         val core = ColorUtils.blendARGB(color, 0xFFFFFFFF.toInt(), 0.25f + 0.25f * pulse)
-        val coreA = (0.20f + 0.45f * brightness * (0.4f + 0.6f * pulse)).coerceIn(0f, 0.8f)
+        val coreA = gain * (0.20f + 0.45f * brightness * (0.4f + 0.6f * pulse)).coerceIn(0f, 0.8f)
         paint.shader = RadialGradient(
             cx, cy, coreR,
             intArrayOf(ColorUtils.setAlphaComponent(core, (coreA * 255).toInt()), 0x00000000),
@@ -89,6 +91,6 @@ class AuraView @JvmOverloads constructor(
         )
         canvas.drawRect(0f, 0f, w, h, paint)
         paint.shader = null
-        if (attached && visibility == VISIBLE && windowVisibility == VISIBLE) postInvalidateDelayed(33)
+        if (attached && visibility == VISIBLE && windowVisibility == VISIBLE) postInvalidateDelayed(1000L / AppSettings.fps)
     }
 }
