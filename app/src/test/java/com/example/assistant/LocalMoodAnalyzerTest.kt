@@ -118,9 +118,10 @@ class LocalMoodAnalyzerTest {
             MoodSegment(30, 45, "calm", 50, 50, 15, mapOf("calm" to 100))
         )
         val transitions = LocalMoodAnalyzer.transitionLabels(segments)
-        assertEquals(2, transitions.size)
+        assertEquals(3, transitions.size)
         assertTrue(transitions[0].contains("нарастание энергии"))
-        assertTrue(transitions[1].contains("спад энергии"))
+        assertTrue(transitions[1].contains("нарастание энергии"))
+        assertTrue(transitions[2].contains("спад энергии"))
     }
 
     @Test fun overlappingSegmentsAreWeightedByUniqueTimelineCoverage() {
