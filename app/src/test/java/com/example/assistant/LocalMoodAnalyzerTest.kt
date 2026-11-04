@@ -110,6 +110,19 @@ class LocalMoodAnalyzerTest {
         assertTrue(result.tension in 0..100)
         assertTrue(result.danceability in 0..100)
     }
+    @Test fun detectsStrongEnergyTransitionsBetweenAdjacentSegments() {
+        val segments = listOf(
+            MoodSegment(0, 20, "calm", 50, 20, 10, mapOf("calm" to 100)),
+            MoodSegment(10, 30, "energetic", 50, 45, 20, mapOf("energetic" to 100)),
+            MoodSegment(20, 40, "energetic", 50, 75, 30, mapOf("energetic" to 100)),
+            MoodSegment(30, 45, "calm", 50, 50, 15, mapOf("calm" to 100))
+        )
+        val transitions = LocalMoodAnalyzer.transitionLabels(segments)
+        assertEquals(2, transitions.size)
+        assertTrue(transitions[0].contains("нарастание энергии"))
+        assertTrue(transitions[1].contains("спад энергии"))
+    }
+
     @Test fun overlappingSegmentsAreWeightedByUniqueTimelineCoverage() {
         val segments = listOf(
             MoodSegment(0, 20, "calm", 50, 20, 10, mapOf("calm" to 100)),
