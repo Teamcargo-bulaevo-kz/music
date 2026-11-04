@@ -82,7 +82,7 @@ object AppSettings {
 
     fun resetAll() { if (ready()) sp.edit().clear().apply() }
 
-    val coverFactor get() = floatArrayOf(0.6f, 0.8f, 1.0f)[coverSize]
+    val coverFactor get() = floatArrayOf(0.45f, 0.6f, 0.8f)[coverSize]
     val buttonScale get() = floatArrayOf(0.85f, 1.0f, 1.2f)[buttonSize]
     val titleSp get() = floatArrayOf(18f, 22f, 26f)[textSize]
 }

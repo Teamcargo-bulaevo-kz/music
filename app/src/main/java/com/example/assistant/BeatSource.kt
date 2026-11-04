@@ -23,6 +23,12 @@ object BeatSource {
     @Volatile var level = 0f
         private set
 
+    /** Средние (300-2000 Гц) и высокие (2000-8000 Гц) частоты, 0..1. Сглаживает потребитель. */
+    @Volatile var mid = 0f
+        private set
+    @Volatile var treble = 0f
+        private set
+
     /** Получает копию спектра (re, im попарно) на потоке анализатора. Ставится на время жизни экрана плеера. */
     @Volatile var fftListener: ((ByteArray) -> Unit)? = null
 
@@ -31,6 +37,8 @@ object BeatSource {
     @Volatile private var lastRealFrame = 0L
     private var bassPeak = 12f
     private var levelPeak = 6f
+    private var midPeak = 6f
+    private var treblePeak = 4f
 
     /** true, если приходят настоящие данные звука, а не условный ритм. */
     val isLive: Boolean get() = live && SystemClock.uptimeMillis() - lastRealFrame < 600
@@ -73,6 +81,8 @@ object BeatSource {
         live = false
         bass = 0f
         level = 0f
+        mid = 0f
+        treble = 0f
     }
 
     private fun process(fft: ByteArray, samplingRateMilliHz: Int) {
@@ -84,12 +94,18 @@ object BeatSource {
         var bassN = 0
         var allSum = 0f
         var allN = 0
+        var midSum = 0f
+        var midN = 0
+        var trebleSum = 0f
+        var trebleN = 0
         for (k in 1 until bins) {
             val f = k * binHz
-            if (f > 4000f) break
+            if (f > 8000f) break
             val m = hypot(fft[2 * k].toFloat(), fft[2 * k + 1].toFloat())
             if (f in 40f..220f) { bassSum += m; bassN++ }
-            allSum += m; allN++
+            if (f in 300f..2000f) { midSum += m; midN++ }
+            if (f > 2000f) { trebleSum += m; trebleN++ }
+            if (f <= 4000f) { allSum += m; allN++ }
         }
         val rawBass = if (bassN > 0) bassSum / bassN else 0f
         val rawLevel = if (allN > 0) allSum / allN else 0f
@@ -98,6 +114,12 @@ object BeatSource {
         levelPeak = max(levelPeak * 0.992f, max(rawLevel, 3f))
         val b = (rawBass / bassPeak).coerceIn(0f, 1f).pow(1.4f)
         val l = (rawLevel / levelPeak).coerceIn(0f, 1f).pow(1.2f)
+        val rawMid = if (midN > 0) midSum / midN else 0f
+        val rawTreble = if (trebleN > 0) trebleSum / trebleN else 0f
+        midPeak = max(midPeak * 0.992f, max(rawMid, 3f))
+        treblePeak = max(treblePeak * 0.992f, max(rawTreble, 2f))
+        mid = (rawMid / midPeak).coerceIn(0f, 1f)
+        treble = (rawTreble / treblePeak).coerceIn(0f, 1f)
         // быстро растём на ударе, плавно затухаем
         bass = if (b > bass) bass + (b - bass) * 0.75f else bass * 0.88f + b * 0.12f
         level = if (l > level) level + (l - level) * 0.5f else level * 0.93f + l * 0.07f
@@ -109,6 +131,8 @@ object BeatSource {
         if (!playing) {
             bass *= 0.92f
             level *= 0.95f
+            mid *= 0.95f
+            treble *= 0.95f
             return
         }
         if (isLive) return
@@ -119,5 +143,8 @@ object BeatSource {
         val fakeLevel = 0.25f + 0.3f * slow + 0.15f * pulse
         bass += (fakeBass - bass) * 0.25f
         level += (fakeLevel - level) * 0.15f
+        val slow2 = (sin(t * 2 * PI * 0.23) * 0.5 + 0.5).toFloat()
+        mid += (0.3f + 0.4f * slow2 - mid) * 0.05f
+        treble += (0.2f + 0.3f * slow - treble) * 0.05f
     }
 }

@@ -12,7 +12,7 @@
         android:id="@+id/content"
         android:layout_width="match_parent" android:layout_height="match_parent"
         android:gravity="center_horizontal" android:orientation="vertical"
-        android:paddingStart="32dp" android:paddingEnd="32dp" android:paddingTop="8dp" android:paddingBottom="24dp">
+        android:paddingStart="32dp" android:paddingEnd="32dp" android:paddingTop="8dp" android:paddingBottom="48dp">
 
         <ImageButton
             android:id="@+id/moreButton" android:layout_width="44dp" android:layout_height="44dp"
@@ -31,6 +31,7 @@
 
         <TextView
             android:id="@+id/title" android:layout_width="match_parent" android:layout_height="wrap_content"
+            android:layout_marginTop="16dp"
             android:ellipsize="end" android:gravity="center" android:maxLines="2"
             android:textColor="@color/harmonia_text" android:textSize="22sp" android:textStyle="bold" />
         <TextView
@@ -51,7 +52,7 @@
 
         <SeekBar
             android:id="@+id/seek" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="40dp" android:progressTint="#CCFFFFFF" android:thumbTint="#FFFFFFFF"
+            android:layout_marginTop="56dp" android:progressTint="#CCFFFFFF" android:thumbTint="#FFFFFFFF"
             android:progressBackgroundTint="#33FFFFFF" />
         <LinearLayout
             android:id="@+id/timeRow"
@@ -82,7 +83,7 @@
 
         <LinearLayout
             android:id="@+id/buttonRow"
-            android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="28dp"
+            android:layout_width="match_parent" android:layout_height="wrap_content" android:layout_marginTop="36dp"
             android:gravity="center" android:orientation="horizontal">
             <ImageButton
                 android:id="@+id/dislikeButton" android:layout_width="44dp" android:layout_height="44dp"

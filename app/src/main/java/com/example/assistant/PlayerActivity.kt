@@ -74,7 +74,8 @@ class PlayerActivity : AppCompatActivity() {
         // Обложка небольшая и по центру, вокруг много воздуха
         val coverBox = findViewById<android.view.View>(R.id.coverBox)
         coverBox.addOnLayoutChangeListener { v, l, t, r, b, _, _, _, _ ->
-            val side = (minOf(r - l - v.paddingLeft - v.paddingRight, b - t) * AppSettings.coverFactor).toInt().coerceAtMost((260 * resources.displayMetrics.density).toInt())
+            val side = (minOf(r - l - v.paddingLeft - v.paddingRight, b - t) * AppSettings.coverFactor).toInt().coerceAtMost((240 * resources.displayMetrics.density).toInt())
+            aura.centerYPx = (t + b) / 2f
             val lp = cover.layoutParams as android.widget.FrameLayout.LayoutParams
             if (side > 0 && (lp.width != side || lp.height != side)) {
                 lp.width = side; lp.height = side; lp.gravity = android.view.Gravity.CENTER
@@ -107,7 +108,7 @@ class PlayerActivity : AppCompatActivity() {
         shownTrackId = -1L // характеристики могли поменять в редакторе
         applySettings()
         // Спектр приходит от общего анализатора звука; разрешение просит главный экран с пояснением
-        if (!BeatSource.isLive && ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
+        if ((AppSettings.auraEnabled || AppSettings.debugView) && !BeatSource.isLive && ContextCompat.checkSelfPermission(this, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) {
             BeatSource.attach(MusicService.instance?.audioSessionId ?: 0)
         }
         BeatSource.fftListener = if (AppSettings.debugView) { data -> spectrum.setFftData(data) } else null
