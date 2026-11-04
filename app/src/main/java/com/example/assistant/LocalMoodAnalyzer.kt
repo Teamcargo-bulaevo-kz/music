@@ -10,7 +10,7 @@ import java.nio.ByteOrder
 import kotlin.math.*
 
 data class MoodAnalysis(val scores: Map<String, Int>, val energy: Int, val bpm: Int, val confidence: Int, val description: String, val valence: Int = 50, val arousal: Int = 50, val tension: Int = 50, val danceability: Int = 0, val segments: List<MoodSegment> = emptyList())
-data class AudioFeatures(val rms: Double, val centroid: Double, val low: Double, val high: Double, val flatness: Double, val flux: Double, val beat: Double, val bpm: Int, val dynamics: Double, val count: Int, val durationSeconds: Double = 0.0, val variation: Double = 0.0)
+data class AudioFeatures(val rms: Double, val centroid: Double, val low: Double, val high: Double, val flatness: Double, val flux: Double, val beat: Double, val bpm: Int, val dynamics: Double, val count: Int, val durationSeconds: Double = 0.0, val variation: Double = 0.0, val beatAccent: Double = 0.0)
 
 /** Локальный анализ PCM: сеть, Groq и внешние модели не используются. */
 object LocalMoodAnalyzer {
@@ -207,12 +207,47 @@ object LocalMoodAnalyzer {
         val sorted=env.sorted();val median=if(sorted.isEmpty())0.0 else sorted[sorted.size/2]
         val dynamics=if(median>1e-8)((env.maxOrNull()?:median)/median).coerceAtMost(12.0)else 1.0
         // Спектральный flux реагирует на атаки и удары точнее, чем общая громкость RMS.
-        val beat=detectBeat(fluxes,sampleRate.toDouble()/hop)
+        val fps = sampleRate.toDouble() / hop
+        val beat=detectBeat(fluxes,fps)
+        val accent = estimateBeatAccent(fluxes, fps, beat.second)
         val meanEnv=env.average().coerceAtLeast(1e-9)
         val variation=if(env.isNotEmpty())sqrt(env.map{(it-meanEnv)*(it-meanEnv)}.average())/meanEnv else 0.0
-        return AudioFeatures(sqrt(sumSq/max(1,x.size)),centers.average().finiteOrZero(),lows.average().finiteOrZero(),highs.average().finiteOrZero(),flats.average().finiteOrZero(),fluxes.average().finiteOrZero(),beat.first,beat.second,dynamics,x.size,x.size.toDouble()/sampleRate,variation.finiteOrZero())
+        return AudioFeatures(sqrt(sumSq/max(1,x.size)),centers.average().finiteOrZero(),lows.average().finiteOrZero(),highs.average().finiteOrZero(),flats.average().finiteOrZero(),fluxes.average().finiteOrZero(),beat.first,beat.second,dynamics,x.size,x.size.toDouble()/sampleRate,variation.finiteOrZero(),accent)
     }
     private fun Double.finiteOrZero()=if(isFinite())this else 0.0
+
+    /**
+     * Оценивает акцент сильной доли относительно слабой по спектральным атакам.
+     * Это относительная выраженность пульса, не распознавание размера такта.
+     */
+    internal fun estimateBeatAccent(onsets: List<Double>, fps: Double, bpm: Int): Double {
+        if (bpm !in 60..180 || onsets.size < 24 || fps <= 0.0) return 0.0
+        val lag = (fps * 60.0 / bpm).roundToInt().coerceAtLeast(2)
+        val half = (lag / 2).coerceAtLeast(1)
+        if (onsets.size < lag * 3) return 0.0
+        val mean = onsets.average()
+        val centered = onsets.map { (it - mean).coerceAtLeast(0.0) }
+        var best = 0.0
+        for (phase in 0 until lag) {
+            var strong = 0.0
+            var weak = 0.0
+            var count = 0
+            var i = phase
+            while (i < centered.size) {
+                strong += centered[i]
+                val weakIndex = i + half
+                if (weakIndex < centered.size) weak += centered[weakIndex]
+                count++
+                i += lag
+            }
+            if (count > 0) {
+                val contrast = (strong / count - weak / count) /
+                    (strong / count + weak / count + 1e-9)
+                best = max(best, contrast)
+            }
+        }
+        return best.coerceIn(0.0, 1.0)
+    }
 
     private fun detectBeat(onsets:List<Double>,fps:Double):Pair<Double,Int>{
         if(onsets.size<80)return 0.0 to 0
@@ -251,13 +286,13 @@ object LocalMoodAnalyzer {
     fun classify(f:AudioFeatures):MoodAnalysis{
         fun u(v:Double)=if(v.isFinite())v.coerceIn(0.0,1.0)else 0.0
         val energy=.42*u((f.rms-.012)/.20)+.28*u((f.bpm-60.0)/120)+.18*u(f.flux*4)+.12*u(f.centroid/6500)
-        val bright=u(f.centroid/6500);val rhythm=u((f.beat-.07)/.55);val smooth=1-u(f.flatness*2.2);val stable=1-u(f.dynamics/8)
+        val bright=u(f.centroid/6500);val rhythm=u((f.beat-.07)/.55) * (.65 + .35 * u(f.beatAccent * 2.0));val smooth=1-u(f.flatness*2.2);val stable=1-u(f.dynamics/8)
         val dance=if(f.bpm in 100..140)1.0 else 1-min(1.0,abs(f.bpm-120)/75.0)
         // Двухосевая модель: валентность и возбуждение дополняют, но не подменяют теги настроения.
         val valence=u(.38*bright+.28*smooth+.20*energy+.14*(1-u(f.low*1.8)))
         val arousal=u(.55*energy+.25*rhythm+.20*u(f.variation/2.5))
         val tension=u(.35*f.flatness+.25*u(f.flux*3)+.22*u(f.dynamics/8)+.18*(1-smooth))
-        val danceability=u(.48*dance+.32*rhythm+.20*energy)
+        val danceability=u(.42*dance+.30*rhythm+.18*energy+.10*u(f.beatAccent*2.0))
         val raw=linkedMapOf(
             "energetic" to (.12+.45*energy+.22*rhythm+.21*u(f.flux*3)),
             "calm" to (.12+.42*(1-energy)+.24*stable+.22*(1-bright)),
