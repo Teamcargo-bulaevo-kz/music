@@ -9,12 +9,17 @@ import android.graphics.Shader
 import android.util.AttributeSet
 import android.view.View
 import androidx.core.graphics.ColorUtils
+import kotlin.math.PI
+import kotlin.math.exp
+import kotlin.math.pow
+import kotlin.math.sin
+import kotlin.math.sqrt
 
 /**
- * Атмосферное свечение за обложкой: неподвижный центр, мягкий радиальный градиент без границ.
- * Бас задаёт яркость и радиус, средние частоты насыщенность и оттенок внутри палитры,
- * высокие слегка добавляют яркость. Все показатели сглажены (EMA): быстро растут, медленно гаснут.
- * Без колец, частиц, волн и вращения.
+ * Свечение из центра обложки: один центр, цвет расходится наружу и гаснет. Бас сильно меняет радиус
+ * и яркость. Цвет живой: оттенок плывёт по всему кругу, и чем быстрее и громче музыка, тем быстрее
+ * и в тёплую сторону; на медленных частях уходит в холодные тона. Настроение песни задаёт центр палитры.
+ * Показатели сглажены (EMA), поэтому движение крупное, но плавное. Без колец, частиц и вращения.
  */
 class AuraView @JvmOverloads constructor(
     context: Context,
@@ -37,6 +42,8 @@ class AuraView @JvmOverloads constructor(
     private var bass = 0f
     private var mid = 0f
     private var treble = 0f
+    private var activity = 0.3f // медленная «энергия» последних секунд: темп и громкость
+    private var drift = 0f // накопленный сдвиг оттенка в градусах
 
     private var lastMs = 0L
     private var attached = false
@@ -55,7 +62,18 @@ class AuraView @JvmOverloads constructor(
     /** EMA с разной скоростью роста и затухания; зависит от времени кадра, а не от частоты кадров. */
     private fun ema(cur: Float, raw: Float, dt: Float, attack: Float, release: Float): Float {
         val rate = if (raw > cur) attack else release
-        return cur + (raw - cur) * (1f - Math.exp((-rate * dt).toDouble()).toFloat())
+        return cur + (raw - cur) * (1f - exp(-rate * dt))
+    }
+
+    /** Среднее двух оттенков по кратчайшей дуге круга, t от 0 до 1. */
+    private fun lerpHue(a: Float, b: Float, t: Float): Float {
+        var d = ((b - a + 540f) % 360f) - 180f
+        return (a + d * t + 360f) % 360f
+    }
+
+    private fun tone(h: Float, s: Float, v: Float): Int {
+        hsv[0] = (h % 360f + 360f) % 360f; hsv[1] = s.coerceIn(0f, 1f); hsv[2] = v.coerceIn(0f, 1f)
+        return Color.HSVToColor(hsv)
     }
 
     override fun onDraw(canvas: Canvas) {
@@ -64,31 +82,32 @@ class AuraView @JvmOverloads constructor(
         lastMs = now
         BeatSource.tick(PlayerState.playing && MusicService.isRunning)
 
-        // плавный переход палитры и характера (около секунды)
-        val k = 1f - Math.exp((-2.5f * dt).toDouble()).toFloat()
+        // плавный переход палитры настроения (около секунды)
+        val k = 1f - exp(-2.5f * dt)
         baseColor = ColorUtils.blendARGB(baseColor, target.color, k)
         brightness += (target.brightness - brightness) * k
         reactivity += (target.reactivity - reactivity) * k
         speed += (target.speed - speed) * k
 
-        val sens = AppSettings.beatSensitivity / 100f
-        val r = reactivity * sens
-        // бас: быстро (около 0.1 с) растёт, медленно (около 0.8 с) гаснет; остальное мягче
-        bass = ema(bass, (BeatSource.bass * r).coerceAtMost(1f), dt, 14f * speed.coerceAtLeast(0.6f), 1.3f)
-        mid = ema(mid, (BeatSource.mid * r).coerceAtMost(1f), dt, 4f, 1.0f)
-        treble = ema(treble, (BeatSource.treble * r).coerceAtMost(1f), dt, 5f, 1.5f)
+        // чувствительность: сжимаем динамику корнем, чтобы средний звук тоже был заметен
+        val sens = AppSettings.beatSensitivity / 100f * (0.8f + 0.5f * reactivity)
+        fun boost(x: Float) = (sqrt(x.coerceIn(0f, 1f)) * sens).coerceIn(0f, 1f)
+        // бас: очень быстрый рост (около 0.04 с) и умеренное затухание (около 0.4 с)
+        bass = ema(bass, boost(BeatSource.bass), dt, 30f, 2.5f)
+        mid = ema(mid, boost(BeatSource.mid), dt, 8f, 2f)
+        treble = ema(treble, boost(BeatSource.treble), dt, 10f, 3f)
+        // энергия и темп последних секунд: реагирует за 1-2 секунды
+        activity = ema(activity, (0.65f * boost(BeatSource.level) + 0.35f * bass).coerceIn(0f, 1f), dt, 0.9f, 0.5f)
 
-        // Основной оттенок палитры; средние частоты сдвигают его на +-18 градусов
+        // оттенок: центр от настроения, смещение от темпа (быстро: к тёплым, медленно: к холодным),
+        // плюс дрейф по кругу, скорость которого растёт с энергией и ударами
         Color.colorToHSV(baseColor, hsv)
-        val hue = (hsv[0] + (mid - 0.5f) * 36f + 360f) % 360f
-        val sat = (0.80f + 0.20f * mid).coerceIn(0f, 1f)
-        // парный оттенок: уводит в сторону фиолетового/пурпурного, как на эталоне (красный справа, фиолетовый слева)
-        val hue2 = if (hue >= 180f) (hue + 50f) % 360f else (hue - 50f + 360f) % 360f
-        val hueAccent = (hue + 25f) % 360f
-        fun tone(hh: Float, v: Float) = Color.HSVToColor(floatArrayOf(hh, sat, v.coerceIn(0f, 1f)))
-        val main = tone(hue, 1f)
-        val second = tone(hue2, 0.95f)
-        val accent = ColorUtils.blendARGB(tone(hueAccent, 1f), 0xFFFFFFFF.toInt(), 0.15f + 0.20f * treble)
+        val moodHue = hsv[0]
+        val tempoHue = lerpHue(235f, 8f, activity.pow(0.8f)) // тихо: синий, громко: красно-оранжевый
+        drift += dt * (6f + 70f * activity + 40f * bass) * speed
+        val wander = (35f + 90f * activity) * sin(drift * PI.toFloat() / 180f)
+        val hue = lerpHue(moodHue, tempoHue, 0.45f) + wander + (mid - 0.5f) * 40f
+        val sat = (0.78f + 0.22f * mid).coerceIn(0f, 1f)
 
         val w = width.toFloat(); val h = height.toFloat()
         canvas.drawColor(BG)
@@ -96,22 +115,39 @@ class AuraView @JvmOverloads constructor(
         val cy = if (centerYPx > 0f) centerYPx else h * 0.40f
         val gain = AppSettings.auraBrightness / 100f
         val cr = if (coverRadiusPx > 0f) coverRadiusPx else w * 0.25f
-        // яркость: бас делает удар заметным, но основа остаётся яркой даже на спокойной музыке
-        val a = (gain * (0.55f + 0.45f * brightness) * (0.70f + 0.30f * bass) + 0.06f * treble).coerceIn(0f, 1f)
-        val outerR = cr * (2.7f + 0.8f * bass)
 
-        paint.xfermode = ADD
-        blob(canvas, cx - 0.40f * cr, cy + 0.15f * cr, outerR * 0.95f, second, a * 0.95f, cr)
-        blob(canvas, cx + 0.40f * cr, cy - 0.10f * cr, outerR, main, a, cr)
-        blob(canvas, cx + 0.70f * cr, cy - 0.50f * cr, outerR * 0.55f, accent, a * (0.55f + 0.35f * mid), cr)
-        paint.xfermode = null
+        // большая амплитуда: радиус от 1.9 до 4.4 радиусов обложки, яркость от 35% до 100%
+        val outerR = cr * (1.9f + 2.5f * bass)
+        val a = (gain * (0.30f + 0.70f * bass) * (0.8f + 0.2f * brightness) + 0.08f * treble).coerceIn(0f, 1f)
+        val f = (cr / outerR).coerceIn(0.05f, 0.9f)
+        // от центра наружу оттенок уходит дальше по кругу: вид «расходящихся» цветов
+        val c0 = tone(hue, sat, 1f)
+        val c1 = tone(hue + 28f, sat, 1f)
+        val c2 = tone(hue + 65f, sat, 0.95f)
+        val c3 = tone(hue + 110f, sat, 0.9f)
+        fun al(x: Float) = (a * x * 255f).toInt().coerceIn(0, 255)
+        paint.shader = RadialGradient(
+            cx, cy, outerR,
+            intArrayOf(
+                ColorUtils.setAlphaComponent(c0, al(1f)),
+                ColorUtils.setAlphaComponent(c0, al(1f)),
+                ColorUtils.setAlphaComponent(c1, al(0.75f)),
+                ColorUtils.setAlphaComponent(c2, al(0.38f)),
+                ColorUtils.setAlphaComponent(c3, al(0.12f)),
+                0x00000000
+            ),
+            floatArrayOf(0f, f, f + (1f - f) * 0.22f, f + (1f - f) * 0.5f, f + (1f - f) * 0.78f, 1f),
+            Shader.TileMode.CLAMP
+        )
+        canvas.drawRect(0f, 0f, w, h, paint)
 
-        // тонкий яркий ободок у края обложки
-        val rim = ColorUtils.blendARGB(main, 0xFFFFFFFF.toInt(), 0.35f)
-        val ra = (0.55f + 0.40f * bass) * gain
+        // тонкий светлый ободок у края обложки
+        val rim = ColorUtils.blendARGB(c0, 0xFFFFFFFF.toInt(), 0.35f)
+        val ra = (0.45f + 0.50f * bass) * gain
         paint.shader = RadialGradient(
             cx, cy, cr * 1.20f,
-            intArrayOf(0x00000000, ColorUtils.setAlphaComponent(rim, (ra * 255).toInt()), ColorUtils.setAlphaComponent(rim, (ra * 0.35f * 255).toInt()), 0x00000000),
+            intArrayOf(0x00000000, ColorUtils.setAlphaComponent(rim, (ra * 255).toInt().coerceIn(0, 255)),
+                ColorUtils.setAlphaComponent(rim, (ra * 0.3f * 255).toInt().coerceIn(0, 255)), 0x00000000),
             floatArrayOf(0f, 0.95f / 1.20f, 1.06f / 1.20f, 1f), Shader.TileMode.CLAMP
         )
         canvas.drawRect(0f, 0f, w, h, paint)
@@ -119,26 +155,7 @@ class AuraView @JvmOverloads constructor(
         if (attached && visibility == VISIBLE && windowVisibility == VISIBLE) postInvalidateDelayed(1000L / AppSettings.fps)
     }
 
-    /** Мягкое цветное пятно: полная яркость до края обложки, затем плавное затухание. */
-    private fun blob(c: Canvas, x: Float, y: Float, r: Float, color: Int, alpha: Float, cover: Float) {
-        val f = (cover / r).coerceIn(0.05f, 0.9f)
-        val al = alpha.coerceIn(0f, 1f)
-        paint.shader = RadialGradient(
-            x, y, r,
-            intArrayOf(
-                ColorUtils.setAlphaComponent(color, (al * 255).toInt()),
-                ColorUtils.setAlphaComponent(color, (al * 255).toInt()),
-                ColorUtils.setAlphaComponent(color, (al * 0.55f * 255).toInt()),
-                ColorUtils.setAlphaComponent(color, (al * 0.18f * 255).toInt()),
-                0x00000000
-            ),
-            floatArrayOf(0f, f, f + (1f - f) * 0.25f, f + (1f - f) * 0.6f, 1f), Shader.TileMode.CLAMP
-        )
-        c.drawRect(0f, 0f, width.toFloat(), height.toFloat(), paint)
-    }
-
     private companion object {
-        val ADD = android.graphics.PorterDuffXfermode(android.graphics.PorterDuff.Mode.ADD)
         const val BG = 0xFF020206.toInt()
     }
 }
