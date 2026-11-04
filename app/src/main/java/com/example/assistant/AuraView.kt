@@ -9,10 +9,8 @@ import android.graphics.Shader
 import android.util.AttributeSet
 import android.view.View
 import androidx.core.graphics.ColorUtils
-import kotlin.math.PI
 import kotlin.math.exp
 import kotlin.math.pow
-import kotlin.math.sin
 import kotlin.math.sqrt
 
 /**
@@ -49,7 +47,7 @@ class AuraView @JvmOverloads constructor(
     private var mid = 0f
     private var treble = 0f
     private var activity = 0.3f // медленная «энергия» последних секунд: темп и громкость
-    private var drift = 0f // накопленный сдвиг оттенка в градусах
+    private var beatPhase = 0f // фаза цветового перехода, синхронизированная с BPM
 
     private var lastMs = 0L
     private var attached = false
@@ -110,9 +108,14 @@ class AuraView @JvmOverloads constructor(
         Color.colorToHSV(baseColor, hsv)
         val moodHue = hsv[0]
         val tempoHue = lerpHue(235f, 8f, activity.pow(0.8f)) // тихо: синий, громко: красно-оранжевый
-        drift += dt * (6f + 70f * activity + 40f * bass) * speed
-        val wander = (35f + 90f * activity) * sin(drift * PI.toFloat() / 180f)
-        val hue = lerpHue(moodHue, tempoHue, 0.45f) + wander + (mid - 0.5f) * 40f
+        val bpm = target.bpm.coerceIn(40, 220)
+        if (PlayerState.playing && bpm > 0) beatPhase = (beatPhase + dt * bpm / 60f) % 1f
+        val beatWave = if (PlayerState.playing && bpm > 0) (1f - kotlin.math.cos(beatPhase * 2f * Math.PI.toFloat())) * 0.5f else 0f
+        val tempoWarmth = ((bpm - 70f) / 110f).coerceIn(0f, 1f)
+        val tempoHue = lerpHue(220f, 8f, tempoWarmth)
+        val hueBase = lerpHue(moodHue, tempoHue, 0.32f)
+        // Цвет проходит небольшую дугу в такт BPM; бас мягко усиливает переход.
+        val hue = hueBase + (beatWave - 0.5f) * (8f + 12f * bass) + (mid - 0.5f) * 10f
         val sat = (0.78f + 0.22f * mid).coerceIn(0f, 1f)
 
         val w = width.toFloat(); val h = height.toFloat()
@@ -124,7 +127,8 @@ class AuraView @JvmOverloads constructor(
 
         // большая амплитуда: радиус от 1.9 до 4.4 радиусов обложки, яркость от 35% до 100%
         val outerR = cr * (1.9f + 2.5f * bass)
-        val a = (gain * (0.30f + 0.70f * bass) * (0.8f + 0.2f * brightness) + 0.08f * treble).coerceIn(0f, 1f)
+        val beatLift = if (PlayerState.playing && bpm > 0) beatWave else 0f
+        val a = (gain * (0.30f + 0.58f * bass + 0.12f * beatLift) * (0.8f + 0.2f * brightness) + 0.04f * treble).coerceIn(0f, 1f)
         val f = (cr / outerR).coerceIn(0.05f, 0.9f)
         // от центра наружу оттенок уходит дальше по кругу: вид «расходящихся» цветов
         val c0 = tone(hue, sat, 1f)
