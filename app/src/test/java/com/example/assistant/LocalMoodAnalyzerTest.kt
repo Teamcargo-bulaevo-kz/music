@@ -74,6 +74,22 @@ class LocalMoodAnalyzerTest {
         }
     }
 
+    @Test fun tempoEstimatorDoesNotBiasAmbiguousPeaksToward120Bpm() {
+        val rate = 22050
+        val periods = listOf(0.75, 0.5, 0.4)
+        val expectedBpms = listOf(80, 120, 150)
+        for ((period, expected) in periods.zip(expectedBpms)) {
+            val samples = FloatArray(rate * 12) { i ->
+                val time = i.toDouble() / rate
+                val phase = time % period
+                val pulse = if (phase < 0.055) 0.32 else 0.004
+                (pulse * sin(2.0 * PI * 880.0 * time)).toFloat()
+            }
+            val actual = LocalMoodAnalyzer.extractFeatures(samples, rate).bpm
+            assertTrue("Expected $expected BPM, got $actual", actual in (expected - 8)..(expected + 8))
+        }
+    }
+
     @Test fun silentAudioDoesNotInventTempo() {
         val features = LocalMoodAnalyzer.extractFeatures(FloatArray(22050 * 4), 22050)
         assertEquals(0, features.bpm)
