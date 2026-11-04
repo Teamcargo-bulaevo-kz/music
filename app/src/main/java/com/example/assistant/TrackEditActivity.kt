@@ -108,11 +108,19 @@ class TrackEditActivity : AppCompatActivity() {
                 segmentProfile.visibility = View.GONE
             } else {
                 segmentProfile.visibility = View.VISIBLE
-                segmentProfile.text = "Изменения по ходу трека:\n" + segments.joinToString("\n") { segment ->
+                val segmentLines = segments.joinToString("\n") { segment ->
                     val mood = MusicTags.moods[segment.mood] ?: segment.mood
                     val start = "%d:%02d".format(segment.startSeconds / 60, segment.startSeconds % 60)
                     val end = "%d:%02d".format(segment.endSeconds / 60, segment.endSeconds % 60)
-                    "$start–$end  $mood · энергия ${segment.arousal}/100"
+                    "$start–$end  $mood · возбуждение ${segment.arousal}/100"
+                }
+                val transitions = LocalMoodAnalyzer.transitionLabels(segments)
+                segmentProfile.text = buildString {
+                    append("Изменения по ходу трека:\n")
+                    append(segmentLines)
+                    append("\n\nДинамика:")
+                    append(if (transitions.isEmpty()) "\nВыраженных переходов не обнаружено"
+                        else "\n" + transitions.joinToString("\n"))
                 }
             }
         }
