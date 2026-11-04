@@ -49,14 +49,22 @@ object LocalMoodAnalyzer {
     /** Approximate dynamic transitions between adjacent analysis windows. */
     internal fun transitionLabels(segments: List<MoodSegment>): List<String> {
         if (segments.size < 2) return emptyList()
+        var lastDirection = 0
         return segments.zipWithNext().mapNotNull { (previous, current) ->
             val delta = current.arousal - previous.arousal
-            val at = current.startSeconds
-            val time = "%d:%02d".format(at / 60, at % 60)
-            when {
-                delta >= 15 -> "$time — нарастание энергии (+$delta)"
-                delta <= -15 -> "$time — спад энергии ($delta)"
-                else -> null
+            val direction = when {
+                delta >= 15 -> 1
+                delta <= -15 -> -1
+                else -> 0
+            }
+            if (direction == 0 || direction == lastDirection) {
+                null
+            } else {
+                lastDirection = direction
+                val at = current.startSeconds
+                val time = "%d:%02d".format(at / 60, at % 60)
+                if (direction > 0) "$time — нарастание энергии (+$delta)"
+                else "$time — спад энергии ($delta)"
             }
         }
     }
