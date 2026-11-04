@@ -66,7 +66,8 @@ class MusicActivity : AppCompatActivity() {
     private lateinit var miniCover: android.widget.ImageView
 
     private enum class Sort(val label: String) {
-        NAME("по названию"), ARTIST("по исполнителю"), NEWEST("сначала новые"), OLDEST("сначала старые"), LIKED("любимые сверху")
+        NAME("по названию"), ARTIST("по исполнителю"), NEWEST("сначала новые"), OLDEST("сначала старые"), LIKED("любимые сверху"),
+        ENERGY("по энергичности"), BPM("по темпу BPM"), DANCE("по танцевальности"), CONFIDENCE("по точности анализа")
     }
 
     private val tabNames = listOf("Треки", "Подборки", "Исполнители")
@@ -560,12 +561,19 @@ class MusicActivity : AppCompatActivity() {
 
     private fun sortTracks(tracks: List<MusicTrack>): List<MusicTrack> {
         val byName = compareBy<MusicTrack>({ it.title.lowercase() }, { it.artist.lowercase() })
+        if (sort == Sort.NAME) return tracks.sortedWith(byName)
+        if (sort == Sort.ARTIST) return tracks.sortedWith(compareBy<MusicTrack>({ it.artist.lowercase() }, { it.title.lowercase() }))
+        if (sort == Sort.NEWEST) return tracks.sortedWith(compareByDescending<MusicTrack> { it.dateAdded }.then(byName))
+        if (sort == Sort.OLDEST) return tracks.sortedWith(compareBy<MusicTrack> { it.dateAdded }.then(byName))
+        // Читаем теги один раз на трек: компаратор не должен повторно обращаться к хранилищу.
+        val tagged = tracks.associateWith { MusicTags.get(this, it) }
         return when (sort) {
-            Sort.NAME -> tracks.sortedWith(byName)
-            Sort.ARTIST -> tracks.sortedWith(compareBy<MusicTrack>({ it.artist.lowercase() }, { it.title.lowercase() }))
-            Sort.NEWEST -> tracks.sortedWith(compareByDescending<MusicTrack> { it.dateAdded }.then(byName))
-            Sort.OLDEST -> tracks.sortedWith(compareBy<MusicTrack> { it.dateAdded }.then(byName))
             Sort.LIKED -> tracks.sortedWith(compareByDescending<MusicTrack> { MusicTags.likedOf(this, it) }.then(byName))
+            Sort.ENERGY -> tracks.sortedWith(compareByDescending<MusicTrack> { tagged[it]?.energy ?: 0 }.then(byName))
+            Sort.BPM -> tracks.sortedWith(compareByDescending<MusicTrack> { tagged[it]?.bpm?.takeIf { bpm -> bpm > 0 } ?: -1 }.then(byName))
+            Sort.DANCE -> tracks.sortedWith(compareByDescending<MusicTrack> { tagged[it]?.danceability ?: -1 }.then(byName))
+            Sort.CONFIDENCE -> tracks.sortedWith(compareByDescending<MusicTrack> { tagged[it]?.confidence ?: -1 }.then(byName))
+            else -> tracks.sortedWith(byName)
         }
     }
 
