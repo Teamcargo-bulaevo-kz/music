@@ -194,6 +194,7 @@ class MusicService : Service() {
                     prepared = true
                     if (wantPlay) it.start()
                     BeatSource.attach(it.audioSessionId)
+                    EqualizerManager.attach(it.audioSessionId)
                     refreshState()
                 }
             }
@@ -285,6 +286,7 @@ class MusicService : Service() {
 
     private fun releasePlayer() {
         BeatSource.detach()
+        EqualizerManager.release()
         player?.let {
             try {
                 it.setOnPreparedListener(null)

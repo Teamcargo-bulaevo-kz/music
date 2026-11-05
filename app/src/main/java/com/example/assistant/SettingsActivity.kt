@@ -31,6 +31,9 @@ class SettingsActivity : AppCompatActivity() {
         const val EXTRA_SECTION = "section"
         const val S_SWITCHES = "switches"
         const val S_DESIGN = "design"
+        const val S_ANIMATION = "animation"
+        const val S_PALETTE = "palette"
+        const val S_SOUND = "sound"
         const val S_FOLDERS = "folders"
         const val S_ADVANCED = "advanced"
     }
@@ -56,6 +59,9 @@ class SettingsActivity : AppCompatActivity() {
         when (section) {
             S_SWITCHES -> buildSwitches()
             S_DESIGN -> buildDesign()
+            S_ANIMATION -> buildAnimation()
+            S_PALETTE -> buildPalette()
+            S_SOUND -> buildSound()
             S_FOLDERS -> buildFolders()
             S_ADVANCED -> buildAdvanced()
             else -> buildHome()
@@ -74,6 +80,9 @@ class SettingsActivity : AppCompatActivity() {
         statusText = text("", 13f, R.color.harmonia_muted).also { root.addView(it) }
         navRow("Переключатели", "Свечение, перемотка, оценки") { open(S_SWITCHES) }
         navRow("Дизайн", "Яркость, размеры обложки, текста и кнопок") { open(S_DESIGN) }
+        navRow("Анимация", "Размер, пульс, плавность, темп") { open(S_ANIMATION) }
+        navRow("Палитра", "Цвета свечения: по настроению или свои") { open(S_PALETTE) }
+        navRow("Звук", "Эквалайзер и усиление баса") { open(S_SOUND) }
         navRow("Папки с музыкой", "Какие папки показывать и сканировать") { open(S_FOLDERS) }
         navRow("Расширенные", "Ритм, разметка, обмен с ИИ, отладка, сброс") { open(S_ADVANCED) }
         section("Музыка")
@@ -93,10 +102,78 @@ class SettingsActivity : AppCompatActivity() {
     private fun buildDesign() {
         header("Дизайн", big = true)
         section("Плеер")
-        sliderRow("Яркость свечения", 30, 100, 10, AppSettings.auraBrightness, "%") { AppSettings.auraBrightness = it }
         choiceRow("Размер обложки", listOf("Маленькая", "Средняя", "Большая"), { AppSettings.coverSize }) { AppSettings.coverSize = it }
         choiceRow("Размер названия", listOf("Мелкий", "Обычный", "Крупный"), { AppSettings.textSize }) { AppSettings.textSize = it }
         choiceRow("Размер кнопок", listOf("Маленькие", "Обычные", "Крупные"), { AppSettings.buttonSize }) { AppSettings.buttonSize = it }
+        section("Обложки")
+        choiceRow("Источник обложек", listOf("Как в системе", "Только из файла песни", "Не показывать"), { AppSettings.coverSource }) {
+            AppSettings.coverSource = it; CoverLoader.clear()
+        }
+        text("У отдельной песни обложку можно сменить или убрать: меню песни, пункт «Обложка».", 12f, R.color.harmonia_muted).also { root.addView(it) }
+    }
+
+    /** Небольшой предпросмотр свечения: цвет текущей песни (или нейтральный) и текущие настройки. */
+    private fun addPreview() {
+        val box = android.widget.FrameLayout(this)
+        val aura = AuraView(this).apply {
+            intensity = 1f; showRim = true
+            applyTrack(this@SettingsActivity, PlayerState.track)
+            coverRadiusPx = 36 * dp
+        }
+        box.addView(aura, android.widget.FrameLayout.LayoutParams(-1, -1))
+        aura.addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ -> aura.centerYPx = v.height / 2f }
+        val disc = View(this).apply { setBackgroundResource(R.drawable.cover_placeholder) }
+        box.addView(disc, android.widget.FrameLayout.LayoutParams(px(72), px(72), Gravity.CENTER))
+        root.addView(box, LinearLayout.LayoutParams(-1, px(200)).apply { bottomMargin = px(8) })
+    }
+
+    private fun buildAnimation() {
+        header("Анимация", big = true)
+        addPreview()
+        sliderRow("Яркость свечения", 30, 100, 10, AppSettings.auraBrightness, "%") { AppSettings.auraBrightness = it }
+        sliderRow("Размер свечения", 60, 150, 10, AppSettings.glowSize, "%") { AppSettings.glowSize = it }
+        sliderRow("Размах пульса", 30, 150, 10, AppSettings.pulseAmplitude, "%") { AppSettings.pulseAmplitude = it }
+        sliderRow("Плавность пульса", 0, 100, 10, AppSettings.pulseSmooth, "%") { AppSettings.pulseSmooth = it }
+        sliderRow("Чувствительность к ритму", 50, 150, 10, AppSettings.beatSensitivity, "%") { AppSettings.beatSensitivity = it }
+        switchRow("Пульс по темпу песни", "Держит дыхание в такт ударам и BPM песни", AppSettings.tempoLock) { AppSettings.tempoLock = it }
+        choiceRow("Частота кадров", listOf("20", "30", "60"), { listOf(20, 30, 60).indexOf(AppSettings.fps).coerceAtLeast(1) }) { AppSettings.fps = listOf(20, 30, 60)[it] }
+        text("Пульс настраивается здесь, цвета в разделе «Палитра». Предпросмотр показывает цвет текущей песни.", 12f, R.color.harmonia_muted).also { root.addView(it) }
+    }
+
+    private fun buildPalette() {
+        header("Палитра", big = true)
+        addPreview()
+        val names = listOf("По настроению песни") + MoodPalette.fixed.map { it.first } + "Свой цвет"
+        choiceRow("Палитра", names, { AppSettings.paletteMode }) { AppSettings.paletteMode = it }
+        sliderRow("Свой оттенок", 0, 350, 10, AppSettings.customHue, "°") { AppSettings.customHue = it }
+        sliderRow("Ширина палитры", 0, 100, 10, AppSettings.paletteSpread, "%") { AppSettings.paletteSpread = it }
+        sliderRow("Насыщенность", 30, 100, 10, AppSettings.paletteSaturation, "%") { AppSettings.paletteSaturation = it }
+        sliderRow("Скорость смены цвета", 0, 100, 10, AppSettings.colorSpeed, "%") { AppSettings.colorSpeed = it }
+        switchRow("Цвет по частям песни", "Куплет и припев могут иметь разный оттенок", AppSettings.segmentColors) { AppSettings.segmentColors = it }
+        text("«Свой оттенок» работает при выборе «Свой цвет».", 12f, R.color.harmonia_muted).also { root.addView(it) }
+    }
+
+    private fun buildSound() {
+        header("Звук", big = true)
+        text("Работает с плеером приложения, звук других программ не меняется.", 13f, R.color.harmonia_muted).also { root.addView(it) }
+        switchRow("Эквалайзер", "Включить настройки ниже", AppSettings.eqEnabled) { AppSettings.eqEnabled = it; EqualizerManager.apply() }
+        val info = EqualizerManager.info
+        choiceRow("Готовая настройка", EqualizerManager.presets.map { it.first }, { -1 }) { i ->
+            AppSettings.eqLevels = EqualizerManager.presets[i].second.map { it * 100 }
+            EqualizerManager.apply(); recreate()
+        }
+        val levels = EqualizerManager.resample(AppSettings.eqLevels, info.bands).toMutableList()
+        for (i in 0 until info.bands) {
+            val hz = info.centerHz.getOrElse(i) { 0 }
+            val label = if (hz >= 1000) "${hz / 1000} кГц" else "$hz Гц"
+            sliderRow(label, info.minMb / 100, info.maxMb / 100, 1, levels[i] / 100, " дБ") { db ->
+                levels[i] = db * 100
+                AppSettings.eqLevels = levels.toList()
+                EqualizerManager.apply()
+            }
+        }
+        sliderRow("Усиление баса", 0, 100, 10, AppSettings.bassBoost, "%") { AppSettings.bassBoost = it; EqualizerManager.apply() }
+        text("Число полос и диапазон уточняются после первого запуска песни.", 12f, R.color.harmonia_muted).also { root.addView(it) }
     }
 
     private fun buildFolders() {
@@ -138,8 +215,15 @@ class SettingsActivity : AppCompatActivity() {
         section("Ритм")
         rhythmStatus = text("", 13f, R.color.harmonia_muted).also { root.addView(it) }
         actionRow("Доступ к ритму", "Нужен микрофон, чтобы свечение пульсировало в такт. Звук не записывается") { askRhythmAccess() }
-        sliderRow("Чувствительность к ритму", 50, 150, 10, AppSettings.beatSensitivity, "%") { AppSettings.beatSensitivity = it }
-        choiceRow("Частота кадров фона", listOf("20", "30", "60"), { listOf(20, 30, 60).indexOf(AppSettings.fps).coerceAtLeast(1) }) { AppSettings.fps = listOf(20, 30, 60)[it] }
+
+        section("Обложки")
+        actionRow("Сбросить свои обложки", "Вернуть все обложки, которые ты менял или убирал") {
+            AlertDialog.Builder(this).setTitle("Сбросить все свои обложки?")
+                .setPositiveButton("Сбросить") { _, _ ->
+                    val n = CoverStore.resetAll(this); CoverLoader.clear()
+                    Toast.makeText(this, if (n > 0) "Сброшено" else "Своих обложек не было", Toast.LENGTH_SHORT).show()
+                }.setNegativeButton("Отмена", null).show()
+        }
 
         section("Разметка")
         actionRow("Проверить сомнительные песни", "Песни, в которых разметка не уверена") { runInMain("review") }

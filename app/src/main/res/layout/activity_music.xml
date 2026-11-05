@@ -56,7 +56,10 @@
 
         <androidx.recyclerview.widget.RecyclerView
             android:id="@+id/list" android:layout_width="match_parent" android:layout_height="match_parent"
-            android:layoutAnimation="@anim/music_list_enter" android:clipToPadding="false" android:overScrollMode="ifContentScrolls"
+            android:layoutAnimation="@anim/music_list_enter"
+            app:fastScrollEnabled="true" app:fastScrollVerticalThumbDrawable="@drawable/fast_thumb"
+            app:fastScrollVerticalTrackDrawable="@drawable/fast_track" app:fastScrollHorizontalThumbDrawable="@drawable/fast_thumb_h"
+            app:fastScrollHorizontalTrackDrawable="@drawable/fast_track_h" android:clipToPadding="false" android:overScrollMode="ifContentScrolls"
             android:paddingStart="2dp" android:paddingTop="8dp" android:paddingEnd="2dp" android:paddingBottom="12dp" />
 
         <TextView

@@ -16,6 +16,11 @@ data class Aura(
  */
 object MoodPalette {
 
+    /** Готовые палитры: название и оттенок центра (градусы). */
+    val fixed: List<Pair<String, Int>> = listOf(
+        "Огонь" to 8, "Закат" to 345, "Океан" to 208, "Лёд" to 190, "Лес" to 140, "Неон" to 290, "Фиолетовая ночь" to 262
+    )
+
     val DEFAULT = Aura(0xFF7C6CFF.toInt(), 0.5f, 0.5f, 0.7f)
 
     private val presets: Map<String, Aura> = mapOf(

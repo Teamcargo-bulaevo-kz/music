@@ -45,6 +45,77 @@ object AppSettings {
         get() = !ready() || sp.getBoolean("list_aura", true)
         set(v) = sp.edit().putBoolean("list_aura", v).apply()
 
+    // --- Анимация свечения ---
+    /** Размер свечения, 60..150 %. */
+    var glowSize: Int
+        get() = if (ready()) sp.getInt("glow_size", 100).coerceIn(60, 150) else 100
+        set(v) = sp.edit().putInt("glow_size", v.coerceIn(60, 150)).apply()
+
+    /** Размах пульса (насколько свечение расширяется и сжимается), 30..150 %. */
+    var pulseAmplitude: Int
+        get() = if (ready()) sp.getInt("pulse_amp", 100).coerceIn(30, 150) else 100
+        set(v) = sp.edit().putInt("pulse_amp", v.coerceIn(30, 150)).apply()
+
+    /** Плавность пульса, 0..100: больше значит мягче и медленнее затухает. */
+    var pulseSmooth: Int
+        get() = if (ready()) sp.getInt("pulse_smooth", 50).coerceIn(0, 100) else 50
+        set(v) = sp.edit().putInt("pulse_smooth", v.coerceIn(0, 100)).apply()
+
+    /** Подстраивать пульс под темп песни (BPM) и держать его в такт ударам. */
+    var tempoLock: Boolean
+        get() = !ready() || sp.getBoolean("tempo_lock", true)
+        set(v) = sp.edit().putBoolean("tempo_lock", v).apply()
+
+    // --- Палитра ---
+    /** 0 по настроению песни, 1..7 готовые палитры, 8 своя. */
+    var paletteMode: Int
+        get() = if (ready()) sp.getInt("palette_mode", 0).coerceIn(0, 8) else 0
+        set(v) = sp.edit().putInt("palette_mode", v.coerceIn(0, 8)).apply()
+
+    var customHue: Int
+        get() = if (ready()) sp.getInt("custom_hue", 270).coerceIn(0, 359) else 270
+        set(v) = sp.edit().putInt("custom_hue", v.coerceIn(0, 359)).apply()
+
+    /** Ширина палитры: насколько соседние цвета расходятся от центра, 0..100 %. */
+    var paletteSpread: Int
+        get() = if (ready()) sp.getInt("palette_spread", 50).coerceIn(0, 100) else 50
+        set(v) = sp.edit().putInt("palette_spread", v.coerceIn(0, 100)).apply()
+
+    var paletteSaturation: Int
+        get() = if (ready()) sp.getInt("palette_sat", 90).coerceIn(30, 100) else 90
+        set(v) = sp.edit().putInt("palette_sat", v.coerceIn(30, 100)).apply()
+
+    /** Скорость смены цвета при смене песни или части песни, 0..100 (больше быстрее). */
+    var colorSpeed: Int
+        get() = if (ready()) sp.getInt("color_speed", 40).coerceIn(0, 100) else 40
+        set(v) = sp.edit().putInt("color_speed", v.coerceIn(0, 100)).apply()
+
+    /** Цвет меняется по частям песни (куплет, припев), а не один на всю песню. */
+    var segmentColors: Boolean
+        get() = !ready() || sp.getBoolean("segment_colors", true)
+        set(v) = sp.edit().putBoolean("segment_colors", v).apply()
+
+    // --- Звук ---
+    var eqEnabled: Boolean
+        get() = ready() && sp.getBoolean("eq_on", false)
+        set(v) = sp.edit().putBoolean("eq_on", v).apply()
+
+    /** Уровни полос эквалайзера в милли-децибелах через запятую. */
+    var eqLevels: List<Int>
+        get() = if (ready()) sp.getString("eq_levels", "").orEmpty().split(',').mapNotNull { it.trim().toIntOrNull() } else emptyList()
+        set(v) = sp.edit().putString("eq_levels", v.joinToString(",")).apply()
+
+    /** Усиление баса, 0..100 %. */
+    var bassBoost: Int
+        get() = if (ready()) sp.getInt("bass_boost", 0).coerceIn(0, 100) else 0
+        set(v) = sp.edit().putInt("bass_boost", v.coerceIn(0, 100)).apply()
+
+    // --- Обложки ---
+    /** Откуда брать обложки: 0 как в системе, 1 только из файла песни, 2 не показывать. */
+    var coverSource: Int
+        get() = if (ready()) sp.getInt("cover_source", 0).coerceIn(0, 2) else 0
+        set(v) = sp.edit().putInt("cover_source", v.coerceIn(0, 2)).apply()
+
     var showSeek: Boolean
         get() = !ready() || sp.getBoolean("show_seek", true)
         set(v) = sp.edit().putBoolean("show_seek", v).apply()

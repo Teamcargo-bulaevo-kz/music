@@ -52,8 +52,8 @@
 
         <SeekBar
             android:id="@+id/seek" android:layout_width="match_parent" android:layout_height="wrap_content"
-            android:layout_marginTop="56dp" android:progressTint="#CCFFFFFF" android:thumbTint="#FFFFFFFF"
-            android:progressBackgroundTint="#33FFFFFF" />
+            android:layout_marginTop="56dp" android:progressTint="#99B4B8CC" android:thumbTint="#B4B8CC"
+            android:progressBackgroundTint="#22B4B8CC" />
         <LinearLayout
             android:id="@+id/timeRow"
             android:layout_width="match_parent" android:layout_height="wrap_content" android:orientation="horizontal"
@@ -88,12 +88,12 @@
             <ImageButton
                 android:id="@+id/dislikeButton" android:layout_width="44dp" android:layout_height="44dp"
                 android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Не нравится"
-                android:padding="12dp" android:scaleType="fitCenter" android:src="@drawable/ic_thumb_down" />
+                android:padding="12dp" android:scaleType="fitCenter" android:tint="#9EA3BA" android:src="@drawable/ic_thumb_down" />
             <ImageButton
                 android:id="@+id/prev" android:layout_width="48dp" android:layout_height="48dp"
                 android:layout_marginStart="10dp"
                 android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Назад"
-                android:padding="12dp" android:scaleType="fitCenter" android:src="@drawable/ic_prev" />
+                android:padding="12dp" android:scaleType="fitCenter" android:tint="#9EA3BA" android:src="@drawable/ic_prev" />
             <ImageButton
                 android:id="@+id/play" android:layout_width="60dp" android:layout_height="60dp"
                 android:layout_marginStart="10dp" android:layout_marginEnd="10dp"
@@ -103,7 +103,7 @@
                 android:id="@+id/next" android:layout_width="48dp" android:layout_height="48dp"
                 android:layout_marginEnd="10dp"
                 android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Дальше"
-                android:padding="12dp" android:scaleType="fitCenter" android:src="@drawable/ic_next" />
+                android:padding="12dp" android:scaleType="fitCenter" android:tint="#9EA3BA" android:src="@drawable/ic_next" />
             <ImageButton
                 android:id="@+id/likeButton" android:layout_width="44dp" android:layout_height="44dp"
                 android:background="?attr/selectableItemBackgroundBorderless" android:contentDescription="Нравится"

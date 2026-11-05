@@ -198,8 +198,9 @@ class PlayerActivity : AppCompatActivity() {
             return
         }
         val seconds = PlayerState.position() / 1000
-        val segment = tags.segments.firstOrNull { seconds >= it.startSeconds && seconds < it.endSeconds }
-            ?: tags.segments.lastOrNull { seconds >= it.startSeconds }
+        val segment = if (!AppSettings.segmentColors) null
+            else tags.segments.firstOrNull { seconds >= it.startSeconds && seconds < it.endSeconds }
+                ?: tags.segments.lastOrNull { seconds >= it.startSeconds }
         val scores = segment?.scores?.takeIf { it.isNotEmpty() }
             ?: tags.moodScores.ifEmpty { mapOf((segment?.mood ?: tags.mood) to 100) }
         aura.setAura(MoodPalette.from(scores, segment?.arousal ?: tags.arousal, tags.bpm))
@@ -236,6 +237,7 @@ class PlayerActivity : AppCompatActivity() {
     private fun showMore(anchor: android.view.View) {
         val menu = android.widget.PopupMenu(this, anchor)
         menu.menu.add(0, 8, 0, "О треке")
+        menu.menu.add(0, 9, 0, "Обложка")
         menu.menu.add(0, 1, 0, "Изменить характеристики")
         menu.menu.add(0, 5, 1, "Карта настроения по фрагментам")
         menu.menu.add(0, 2, 2, "Очередь")
@@ -253,6 +255,7 @@ class PlayerActivity : AppCompatActivity() {
                     startActivity(Intent(this, TrackEditActivity::class.java).putExtra(TrackEditActivity.EXTRA_TRACK_ID, it.id))
                 }
                 8 -> showTrackInfo()
+                9 -> PlayerState.track?.let { startActivity(Intent(this, CoverEditorActivity::class.java).putExtra(CoverEditorActivity.EXTRA_TRACK_ID, it.id)) }
                 5 -> showMoodTimeline()
                 2 -> showQueue()
                 3 -> playSimilar()

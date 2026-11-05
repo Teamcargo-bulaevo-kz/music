@@ -49,7 +49,7 @@ class MusicActivity : AppCompatActivity() {
     private data class Row(
         val title: String, val subtitle: String, val track: MusicTrack? = null,
         val onLong: ((View) -> Unit)? = null, val badge: String? = null, val badgeColor: Int = 0,
-        val tags: String = "", val onClick: () -> Unit
+        val tags: String = "", val header: Boolean = false, val onClick: () -> Unit
     )
 
     private val palette = intArrayOf(
@@ -660,10 +660,27 @@ class MusicActivity : AppCompatActivity() {
     private fun trackRows(tracks: List<MusicTrack>): List<Row> =
         tracks.mapIndexed { i, t -> Row(t.title, artistLine(t), t, tags = tagsLine(t)) { startQueue(tracks, i) } }
 
+    private fun letterOf(text: String): String {
+        val c = text.trim().firstOrNull() ?: return "#"
+        return if (c.isLetter()) c.uppercaseChar().toString() else "#"
+    }
+
     /** Список треков; сверху строка «Играть вперемешку», если треков больше одного. */
     private fun trackListRows(tracks: List<MusicTrack>, withShuffle: Boolean): List<Row> {
-        val list = trackRows(tracks)
-        if (!withShuffle || tracks.size < 2) return list
+        val base = trackRows(tracks)
+        if (!withShuffle || tracks.size < 2) return base
+        // Буквы-разделы: только при сортировке по названию или исполнителю и в длинных списках
+        val byLetter = sort == Sort.NAME || sort == Sort.ARTIST
+        val list: List<Row> = if (!byLetter || tracks.size < 12) base else {
+            val out = ArrayList<Row>(base.size + 30)
+            var last = ""
+            tracks.forEachIndexed { i, t ->
+                val key = letterOf(if (sort == Sort.NAME) t.title else t.artist)
+                if (key != last) { out.add(Row(key, "", header = true) {}); last = key }
+                out.add(base[i])
+            }
+            out
+        }
         val pool = tracks.filter { MusicTags.likedOf(this, it) >= 0 }.ifEmpty { tracks }
         val shuffleRow = Row("Играть вперемешку", "${tracks.size} песен", badge = "▶", badgeColor = 0xFF6B5CFF.toInt()) {
             startQueue(pool.shuffled().take(500), 0)
@@ -794,12 +811,14 @@ class MusicActivity : AppCompatActivity() {
         menu.menu.add(0, 2, 1, "В конец очереди")
         menu.menu.add(0, 3, 2, if (liked > 0) "Убрать ♥" else "Нравится ♥")
         menu.menu.add(0, 6, 3, "В подборку")
+        menu.menu.add(0, 8, 5, "Обложка")
         if (drillFolder != null) menu.menu.add(0, 7, 4, "Убрать из папки «${drillFolder}»")
         menu.setOnMenuItemClickListener { item ->
             when (item.itemId) {
                 1, 2 -> enqueue(track, item.itemId == 1)
                 3 -> { MusicTags.setLiked(this, track, if (liked > 0) 0 else 1); rebuild() }
                 6 -> addToFolder(track)
+                8 -> startActivity(Intent(this, CoverEditorActivity::class.java).putExtra(CoverEditorActivity.EXTRA_TRACK_ID, track.id))
                 7 -> removeFromCurrentFolder(track)
             }
             true
@@ -911,7 +930,11 @@ class MusicActivity : AppCompatActivity() {
 
     // ---------------------------------------------------------------- адаптер
 
-    private inner class RowAdapter : RecyclerView.Adapter<RowAdapter.Holder>() {
+    private inner class RowAdapter : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+        inner class HeaderHolder(v: View) : RecyclerView.ViewHolder(v) {
+            val label: TextView = v as TextView
+        }
+
         inner class Holder(v: View) : RecyclerView.ViewHolder(v) {
             val cover: ImageView = v.findViewById(R.id.cover)
             val badge: TextView = v.findViewById(R.id.badge)
@@ -922,14 +945,21 @@ class MusicActivity : AppCompatActivity() {
             val menu: ImageButton = v.findViewById(R.id.menu)
         }
 
-        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int) =
-            Holder(LayoutInflater.from(parent.context).inflate(R.layout.item_music, parent, false))
+        override fun getItemViewType(position: Int) = if (rows[position].header) 1 else 0
+
+        override fun onCreateViewHolder(parent: ViewGroup, viewType: Int): RecyclerView.ViewHolder {
+            val inflater = LayoutInflater.from(parent.context)
+            return if (viewType == 1) HeaderHolder(inflater.inflate(R.layout.item_header, parent, false))
+            else Holder(inflater.inflate(R.layout.item_music, parent, false))
+        }
 
         override fun getItemCount() = rows.size
 
-        override fun onBindViewHolder(holder: Holder, position: Int) {
+        override fun onBindViewHolder(vh: RecyclerView.ViewHolder, position: Int) {
             val ctx = this@MusicActivity
             val row = rows[position]
+            if (row.header) { (vh as HeaderHolder).label.text = row.title; return }
+            val holder = vh as Holder
             val track = row.track
             holder.title.text = row.title
             holder.subtitle.text = row.subtitle

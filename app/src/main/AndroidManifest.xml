@@ -43,6 +43,10 @@
             </intent-filter>
         </activity>
         <activity
+            android:name=".CoverEditorActivity"
+            android:exported="false"
+            android:label="Обложка" />
+        <activity
             android:name=".SettingsActivity"
             android:exported="false"
             android:label="Настройки" />
