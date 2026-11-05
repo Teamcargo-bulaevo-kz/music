@@ -61,6 +61,16 @@ object AppSettings {
         get() = if (ready()) sp.getInt("pulse_smooth", 50).coerceIn(0, 100) else 50
         set(v) = sp.edit().putInt("pulse_smooth", v.coerceIn(0, 100)).apply()
 
+    /** Источник пульса: 0 только удары бочки (спокойно, рекомендуется), 1 весь бас (чаще и резче). */
+    var pulseSource: Int
+        get() = if (ready()) sp.getInt("pulse_source", 0).coerceIn(0, 1) else 0
+        set(v) = sp.edit().putInt("pulse_source", v.coerceIn(0, 1)).apply()
+
+    /** Не чаще стольких пульсов в секунду (1..4). */
+    var maxPulsesPerSec: Int
+        get() = if (ready()) sp.getInt("max_pulses", 2).coerceIn(1, 4) else 2
+        set(v) = sp.edit().putInt("max_pulses", v.coerceIn(1, 4)).apply()
+
     /** Подстраивать пульс под темп песни (BPM) и держать его в такт ударам. */
     var tempoLock: Boolean
         get() = !ready() || sp.getBoolean("tempo_lock", true)

@@ -50,7 +50,10 @@ class AuraView @JvmOverloads constructor(
     private var treble = 0f
     private var pulse = 0f
     private var beatPhase = 0f
-    private var prevBass = 0f
+    private var prevKick = 0f
+    private var kickMean = 0f
+    private var sinceBeat = 10f
+    private var bump = 0f
 
     private var lastMs = 0L
     private var attached = false
@@ -105,35 +108,39 @@ class AuraView @JvmOverloads constructor(
 
         val sens = AppSettings.beatSensitivity / 100f * (0.8f + 0.5f * reactivity)
         fun boost(x: Float) = (sqrt(x.coerceIn(0f, 1f)) * sens).coerceIn(0f, 1f)
-        val rawBass = boost(BeatSource.bass)
         mid = ema(mid, boost(BeatSource.mid), dt, 6f, 1.5f)
         treble = ema(treble, boost(BeatSource.treble), dt, 8f, 2f)
 
-        // Фаза по темпу песни; удар по басу подтягивает её к нулю, чтобы пульс шёл в такт
-        val bpm = target.bpm.coerceIn(0, 220)
+        // Пульс только на ударах бочки (40-110 Гц), остальные частоты в пульсе не участвуют.
+        // Удар ищем по порогу над средним уровнем; чаще заданного числа раз в секунду не пульсируем,
+        // а на быстрых песнях (больше 110 BPM) пульсируем через удар.
         val live = BeatSource.isLive
-        if (playing && bpm > 0 && AppSettings.tempoLock) {
-            beatPhase = (beatPhase + dt * bpm / 60f) % 1f
-            if (live && rawBass > 0.6f && prevBass <= 0.6f) {
-                val err = if (beatPhase > 0.5f) 1f - beatPhase else -beatPhase
-                beatPhase = ((beatPhase + err * 0.35f) % 1f + 1f) % 1f
+        val bpm = target.bpm.coerceIn(0, 220)
+        val divisor = if (bpm > 110) 2 else 1
+        val period = if (bpm > 0) 60f / bpm * divisor else 0.5f
+        val minGap = maxOf(1f / AppSettings.maxPulsesPerSec, period * 0.7f)
+        val ampScale = (0.25f + 0.75f * reactivity.coerceIn(0f, 1f)) * (AppSettings.pulseAmplitude / 100f)
+        sinceBeat += dt
+        if (playing && live) {
+            val kickNow = if (AppSettings.pulseSource == 1) BeatSource.bass else BeatSource.kick
+            kickMean += (kickNow - kickMean) * (1f - exp(-0.9f * dt))
+            val threshold = maxOf(0.45f, kickMean * 1.45f + 0.12f)
+            if (kickNow > threshold && kickNow - prevKick > 0.04f && sinceBeat >= minGap) {
+                sinceBeat = 0f
+                bump = maxOf(bump, ((kickNow - kickMean) * 1.4f + 0.35f).coerceIn(0.25f, 1f))
             }
+            prevKick = kickNow
+        } else if (playing && bpm > 0 && AppSettings.tempoLock) {
+            // нет сигнала звука: ровное дыхание по темпу песни
+            beatPhase = (beatPhase + dt * bpm / 60f / divisor) % 1f
+            bump = 0.7f * (0.5f * (1f + cos(beatPhase * 2f * PI.toFloat()))).pow(1.5f)
         }
-        prevBass = rawBass
-        // Мягкий «вдох» от фазы: резкий в начале удара, плавный спад
-        val wave = (0.5f * (1f + cos(beatPhase * 2f * PI.toFloat()))).pow(2.2f)
-        val locked = playing && bpm > 0 && AppSettings.tempoLock
-        val raw = when {
-            !playing -> 0f
-            live && locked -> (0.6f * rawBass + 0.4f * wave).coerceIn(0f, 1f)
-            live -> rawBass
-            locked -> 0.15f + 0.65f * wave // нет сигнала звука: дышит по темпу
-            else -> 0.2f
-        }
-        // сглаживание пульса: быстрый рост, мягкий спад; ползунок «Плавность» растягивает спад
+        // «вдох» догоняет не мгновенно, «выдох» длинный: выглядит как плавное дыхание
+        if (!(playing && !live && bpm > 0 && AppSettings.tempoLock)) bump = ema(bump, 0f, dt, 1f, 2.2f)
         val smooth = AppSettings.pulseSmooth / 100f
-        pulse = ema(pulse, raw, dt, 22f - 10f * smooth, 5.5f - 4.0f * smooth)
+        pulse = ema(pulse, if (playing) bump else 0f, dt, 14f - 6f * smooth, 3.2f - 1.6f * smooth)
         bass = pulse
+
 
         val w = width.toFloat(); val h = height.toFloat()
         canvas.drawColor(BG)
@@ -144,9 +151,8 @@ class AuraView @JvmOverloads constructor(
 
         // дыхание: радиус от базового размера до базового + размах, яркость тоже чуть дышит
         val size = AppSettings.glowSize / 100f
-        val amp = AppSettings.pulseAmplitude / 100f
-        val outerR = cr * (2.0f * size + 1.5f * amp * pulse)
-        val a = (gain * (0.42f + 0.48f * pulse * amp.coerceAtMost(1.2f)) * (0.85f + 0.15f * brightness) + 0.05f * treble).coerceIn(0f, 1f)
+        val outerR = cr * (2.0f * size + 1.0f * ampScale * pulse)
+        val a = (gain * (0.50f + 0.40f * pulse * ampScale.coerceAtMost(1.2f)) * (0.85f + 0.15f * brightness)).coerceIn(0f, 1f)
         val f = (cr / outerR).coerceIn(0.05f, 0.9f)
 
         // оттенок задан настроением; соседние цвета расходятся от центра на фиксированные углы

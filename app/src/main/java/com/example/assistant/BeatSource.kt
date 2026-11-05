@@ -22,6 +22,10 @@ object BeatSource {
         private set
 
     /** Средние (300-2000 Гц) и высокие (2000-8000 Гц) частоты, 0..1. Сглаживает потребитель. */
+    /** Только удар бочки (40-110 Гц), 0..1, без сглаживания: по нему ищутся удары. */
+    @Volatile var kick = 0f
+        private set
+
     @Volatile var mid = 0f
         private set
     @Volatile var treble = 0f
@@ -36,6 +40,7 @@ object BeatSource {
     private var bassPeak = 12f
     private var levelPeak = 6f
     private var midPeak = 6f
+    private var kickPeak = 10f
     private var treblePeak = 4f
 
     /** true, если приходят настоящие данные звука, а не условный ритм. */
@@ -81,6 +86,7 @@ object BeatSource {
         level = 0f
         mid = 0f
         treble = 0f
+        kick = 0f
     }
 
     private fun process(fft: ByteArray, samplingRateMilliHz: Int) {
@@ -92,6 +98,8 @@ object BeatSource {
         var bassN = 0
         var allSum = 0f
         var allN = 0
+        var kickSum = 0f
+        var kickN = 0
         var midSum = 0f
         var midN = 0
         var trebleSum = 0f
@@ -101,6 +109,7 @@ object BeatSource {
             if (f > 8000f) break
             val m = hypot(fft[2 * k].toFloat(), fft[2 * k + 1].toFloat())
             if (f in 40f..220f) { bassSum += m; bassN++ }
+            if (f in 40f..110f) { kickSum += m; kickN++ }
             if (f in 300f..2000f) { midSum += m; midN++ }
             if (f > 2000f) { trebleSum += m; trebleN++ }
             if (f <= 4000f) { allSum += m; allN++ }
@@ -112,6 +121,9 @@ object BeatSource {
         levelPeak = max(levelPeak * 0.992f, max(rawLevel, 3f))
         val b = (rawBass / bassPeak).coerceIn(0f, 1f).pow(1.4f)
         val l = (rawLevel / levelPeak).coerceIn(0f, 1f).pow(1.2f)
+        val rawKick = if (kickN > 0) kickSum / kickN else 0f
+        kickPeak = max(kickPeak * 0.995f, max(rawKick, 6f))
+        kick = (rawKick / kickPeak).coerceIn(0f, 1f)
         val rawMid = if (midN > 0) midSum / midN else 0f
         val rawTreble = if (trebleN > 0) trebleSum / trebleN else 0f
         midPeak = max(midPeak * 0.992f, max(rawMid, 3f))
@@ -131,6 +143,7 @@ object BeatSource {
             level *= 0.95f
             mid *= 0.95f
             treble *= 0.95f
+            kick *= 0.9f
             return
         }
         if (isLive) return
