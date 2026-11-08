@@ -242,6 +242,15 @@ class SettingsActivity : AppCompatActivity() {
         switchRow("Отладочный вид плеера", "Показать спектр, карту настроения, строку характеристик, вперемешку и повтор", AppSettings.debugView) { AppSettings.debugView = it }
         if (BuildConfig.DEBUG) actionRow("Размер окна", "Для поиска проблем с версткой") { runInMain("window") }
 
+        section("Работа в фоне")
+        actionRow("Не выгружать из фона", "На Xiaomi и других оболочках разреши автозапуск и убери ограничения батареи для приложения") {
+            try { startActivity(Intent(android.provider.Settings.ACTION_IGNORE_BATTERY_OPTIMIZATION_SETTINGS)) }
+            catch (e: Exception) {
+                startActivity(Intent(android.provider.Settings.ACTION_APPLICATION_DETAILS_SETTINGS, android.net.Uri.parse("package:$packageName")))
+            }
+        }
+        actionRow("Журнал воспроизведения", "Что делал плеер: старты, остановки, команды от системы. Поможет найти причину") { showPlayLog() }
+
         section("Сброс")
         actionRow("Сбросить настройки вида", "Папки, размеры и свечение вернутся к исходным") {
             AlertDialog.Builder(this).setTitle("Сбросить настройки?")
@@ -277,6 +286,17 @@ class SettingsActivity : AppCompatActivity() {
     override fun onRequestPermissionsResult(requestCode: Int, permissions: Array<out String>, grantResults: IntArray) {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         refreshStatus()
+    }
+
+    private fun showPlayLog() {
+        val log = PlayLog.read().ifBlank { "Пока пусто. Включи музыку, журнал начнёт заполняться." }
+        AlertDialog.Builder(this).setTitle("Журнал воспроизведения")
+            .setMessage(log.lines().takeLast(25).joinToString("\n"))
+            .setPositiveButton("Поделиться") { _, _ ->
+                startActivity(Intent.createChooser(Intent(Intent.ACTION_SEND).setType("text/plain").putExtra(Intent.EXTRA_TEXT, log), "Отправить журнал"))
+            }
+            .setNeutralButton("Очистить") { _, _ -> PlayLog.clear() }
+            .setNegativeButton("Закрыть", null).show()
     }
 
     private fun confirmRedo() {

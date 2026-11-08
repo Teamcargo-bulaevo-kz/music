@@ -84,6 +84,7 @@ class MusicService : Service() {
     }
 
     private val focusListener = AudioManager.OnAudioFocusChangeListener { change ->
+        PlayLog.add("звуковой фокус: ${focusName(change)}")
         when (change) {
             AudioManager.AUDIOFOCUS_LOSS -> pause()
             AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> {
@@ -105,6 +106,29 @@ class MusicService : Service() {
         }
     }
 
+    private fun focusName(c: Int) = when (c) {
+        AudioManager.AUDIOFOCUS_LOSS -> "потерян насовсем (другое приложение захватило звук)"
+        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT -> "потерян ненадолго"
+        AudioManager.AUDIOFOCUS_LOSS_TRANSIENT_CAN_DUCK -> "потерян, можно приглушить"
+        AudioManager.AUDIOFOCUS_GAIN -> "возвращён"
+        else -> "код $c"
+    }
+
+    /** Автостоп: если музыка долго на паузе, освобождаем плеер, чтобы системные кнопки ничего не включали сами. */
+    private val idleStop = Runnable {
+        if (player?.isPlaying != true) stopPlayback("пауза дольше 10 минут")
+    }
+
+    override fun onTaskRemoved(rootIntent: Intent?) {
+        PlayLog.add("приложение смахнули из недавних")
+        super.onTaskRemoved(rootIntent)
+    }
+
+    override fun onTrimMemory(level: Int) {
+        PlayLog.add("системе не хватает памяти (уровень $level)")
+        super.onTrimMemory(level)
+    }
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -115,11 +139,11 @@ class MusicService : Service() {
         createChannel()
         session = MediaSession(this, "AssistantMusic").apply {
             setCallback(object : MediaSession.Callback() {
-                override fun onPlay() = resume()
-                override fun onPause() = pause()
-                override fun onSkipToNext() = next(auto = false)
-                override fun onSkipToPrevious() = previous()
-                override fun onStop() = stopPlayback()
+                override fun onPlay() { PlayLog.add("команда Play от системы (наушники, Bluetooth, шторка)"); resume() }
+                override fun onPause() { PlayLog.add("команда Pause от системы"); pause() }
+                override fun onSkipToNext() { PlayLog.add("команда Next от системы"); next(auto = false) }
+                override fun onSkipToPrevious() { PlayLog.add("команда Previous от системы"); previous() }
+                override fun onStop() = stopPlayback("команда Stop от системы")
                 override fun onSeekTo(pos: Long) = seekTo(pos.toInt())
                 override fun onCustomAction(action: String, extras: android.os.Bundle?) {
                     if (action == ACTION_LIKE) toggleLike()
@@ -145,7 +169,7 @@ class MusicService : Service() {
             ACTION_RESUME -> resume()
             ACTION_NEXT -> next(auto = false)
             ACTION_PREV -> previous()
-            ACTION_STOP -> stopPlayback()
+            ACTION_STOP -> stopPlayback("кнопка Стоп в уведомлении")
             ACTION_LIKE -> toggleLike()
         }
         if (queue.isEmpty()) stopSelf()
@@ -153,6 +177,8 @@ class MusicService : Service() {
     }
 
     override fun onDestroy() {
+        PlayLog.add("служба музыки остановлена")
+        handler.removeCallbacks(idleStop)
         releasePlayer()
         abandonFocus()
         handler.removeCallbacks(sleepRunnable)
@@ -168,16 +194,18 @@ class MusicService : Service() {
 
     private fun playCurrent() {
         if (queue.isEmpty()) {
-            stopPlayback()
+            stopPlayback("очередь пуста")
             return
         }
         if (index !in queue.indices) index = 0
+        handler.removeCallbacks(idleStop)
         releasePlayer()
         requestFocus()
         prepared = false
         wantPlay = true
 
         val track = queue[index]
+        PlayLog.add("играет: ${track.artist} - ${track.title} (${index + 1} из ${queue.size})")
         val mp = MediaPlayer()
         try {
             mp.setAudioAttributes(
@@ -199,9 +227,10 @@ class MusicService : Service() {
                 }
             }
             mp.setOnCompletionListener {
-                if (player === it) next(auto = true)
+                if (player === it) { PlayLog.add("трек закончился"); next(auto = true) }
             }
-            mp.setOnErrorListener { failed, _, _ ->
+            mp.setOnErrorListener { failed, what, extra ->
+                PlayLog.add("ошибка плеера: код $what/$extra")
                 if (player === failed) skipBroken()
                 true
             }
@@ -220,7 +249,7 @@ class MusicService : Service() {
     private fun skipBroken() {
         errorsInRow++
         if (errorsInRow >= queue.size) {
-            stopPlayback()
+            stopPlayback("подряд не открылись все треки")
         } else {
             next(auto = false)
         }
@@ -233,7 +262,7 @@ class MusicService : Service() {
             return
         }
         if (auto && index >= queue.lastIndex && repeatMode != PlayerState.REPEAT_ALL) {
-            stopPlayback()
+            stopPlayback("очередь закончилась")
             return
         }
         index = if (index >= queue.lastIndex) 0 else index + 1
@@ -256,6 +285,9 @@ class MusicService : Service() {
         resumeOnFocusGain = false
         wantPlay = false
         player?.let { if (prepared && it.isPlaying) it.pause() }
+        handler.removeCallbacks(idleStop)
+        handler.postDelayed(idleStop, 10 * 60_000L)
+        PlayLog.add("пауза")
         refreshState()
     }
 
@@ -264,6 +296,8 @@ class MusicService : Service() {
         // Системный MediaSession/кнопка Resume не должны создавать новый трек
         // или запускать случайную очередь после пересоздания службы.
         val current = player ?: return
+        handler.removeCallbacks(idleStop)
+        PlayLog.add("продолжить")
         if (!prepared) {
             wantPlay = true
             return
@@ -276,7 +310,9 @@ class MusicService : Service() {
         refreshState()
     }
 
-    private fun stopPlayback() {
+    private fun stopPlayback(why: String = "команда") {
+        PlayLog.add("остановка: $why")
+        handler.removeCallbacks(idleStop)
         releasePlayer()
         abandonFocus()
         queue = emptyList()

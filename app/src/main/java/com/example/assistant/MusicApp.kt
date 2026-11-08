@@ -7,6 +7,7 @@ class MusicApp : Application() {
         super.onCreate()
         MusicFiles.init(this)
         AppSettings.init(this)
+        PlayLog.init(this)
         // Запоминаем причину падения, чтобы показать её при следующем запуске
         val old = Thread.getDefaultUncaughtExceptionHandler()
         Thread.setDefaultUncaughtExceptionHandler { t, e ->

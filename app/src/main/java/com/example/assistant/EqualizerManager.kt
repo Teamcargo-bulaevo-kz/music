@@ -29,11 +29,14 @@ object EqualizerManager {
     private var bass: BassBoost? = null
     @Volatile var info: Info = DEFAULT_INFO
         private set
+    private var attempted = false
 
     @Synchronized
     fun attach(sessionId: Int) {
         release()
-        if (sessionId <= 0) return
+        // Эффекты создаём только когда они нужны: меньше риска для воспроизведения
+        if (sessionId <= 0 || !(AppSettings.eqEnabled || AppSettings.bassBoost > 0)) return
+        attempted = true
         try {
             val e = Equalizer(0, sessionId)
             val range = e.bandLevelRange
@@ -50,6 +53,7 @@ object EqualizerManager {
         try { eq?.release() } catch (_: Throwable) {}
         try { bass?.release() } catch (_: Throwable) {}
         eq = null; bass = null
+        attempted = false
     }
 
     /** Растягивает список уровней под нужное число полос. */
@@ -69,6 +73,10 @@ object EqualizerManager {
     @Synchronized
     fun apply() {
         val on = AppSettings.eqEnabled
+        if (on && eq == null && bass == null && !attempted) {
+            val sid = MusicService.instance?.audioSessionId ?: 0
+            if (sid > 0) { attach(sid); return }
+        }
         eq?.let { e ->
             try {
                 val levels = resample(AppSettings.eqLevels, info.bands)
