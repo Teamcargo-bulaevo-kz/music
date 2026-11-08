@@ -129,6 +129,17 @@ class MusicService : Service() {
         super.onTrimMemory(level)
     }
 
+    /** Наушники или Bluetooth отключились: ставим на паузу, чтобы музыка не заиграла из динамика. */
+    private val noisyReceiver = object : android.content.BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == AudioManager.ACTION_AUDIO_BECOMING_NOISY && AppSettings.pauseOnUnplug && player?.isPlaying == true) {
+                PlayLog.add("наушники или Bluetooth отключились: пауза")
+                pause()
+            }
+        }
+    }
+    private var noisyRegistered = false
+
     override fun onBind(intent: Intent?): IBinder? = null
 
     override fun onCreate() {
@@ -137,6 +148,10 @@ class MusicService : Service() {
         instance = this
         audioManager = getSystemService(Context.AUDIO_SERVICE) as AudioManager
         createChannel()
+        try {
+            registerReceiver(noisyReceiver, android.content.IntentFilter(AudioManager.ACTION_AUDIO_BECOMING_NOISY))
+            noisyRegistered = true
+        } catch (_: Exception) {}
         session = MediaSession(this, "AssistantMusic").apply {
             setCallback(object : MediaSession.Callback() {
                 override fun onPlay() { PlayLog.add("команда Play от системы (наушники, Bluetooth, шторка)"); resume() }
@@ -179,6 +194,7 @@ class MusicService : Service() {
     override fun onDestroy() {
         PlayLog.add("служба музыки остановлена")
         handler.removeCallbacks(idleStop)
+        if (noisyRegistered) { try { unregisterReceiver(noisyReceiver) } catch (_: Exception) {}; noisyRegistered = false }
         releasePlayer()
         abandonFocus()
         handler.removeCallbacks(sleepRunnable)

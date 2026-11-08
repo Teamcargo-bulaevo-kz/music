@@ -105,6 +105,17 @@ object AppSettings {
         get() = !ready() || sp.getBoolean("segment_colors", true)
         set(v) = sp.edit().putBoolean("segment_colors", v).apply()
 
+    // --- Фон и разметка ---
+    /** Пауза при отключении наушников или Bluetooth. */
+    var pauseOnUnplug: Boolean
+        get() = !ready() || sp.getBoolean("pause_unplug", true)
+        set(v) = sp.edit().putBoolean("pause_unplug", v).apply()
+
+    /** Сколько песен анализировать одновременно: 0 авто, 1..4. */
+    var analysisWorkers: Int
+        get() = if (ready()) sp.getInt("analysis_workers", 0).coerceIn(0, 4) else 0
+        set(v) = sp.edit().putInt("analysis_workers", v.coerceIn(0, 4)).apply()
+
     // --- Звук ---
     var eqEnabled: Boolean
         get() = ready() && sp.getBoolean("eq_on", false)

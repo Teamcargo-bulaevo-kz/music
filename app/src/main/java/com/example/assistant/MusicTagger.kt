@@ -10,7 +10,10 @@ import androidx.core.content.ContextCompat
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.async
+import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
 
@@ -229,46 +232,72 @@ object MusicTagger {
         total = todo.size
         done = 0
         notifyProgress(context)
+        // Несколько песен анализируются одновременно; число потоков в настройках (по умолчанию по ядрам процессора)
+        val workers = AppSettings.analysisWorkers.takeIf { it in 1..4 }
+            ?: (Runtime.getRuntime().availableProcessors() - 1).coerceIn(2, 4)
+        PlayLog.add("разметка: ${todo.size} песен, потоков $workers")
+        val sem = kotlinx.coroutines.sync.Semaphore(workers)
+        val lock = Any()
         val updates = LinkedHashMap<String, TrackTags>()
-        for (track in todo) {
-            val key = MusicTags.trackKey(track)
-            val old = MusicTags.get(context, track)
-            try {
-                val result = LocalMoodAnalyzer.analyze(context, track.uri)
-                val ordered = result.scores.entries.sortedByDescending { it.value }
-                val moods = ordered.take(3).map { it.key }.toSet()
-                val primary = ordered.firstOrNull()?.key ?: "calm"
-                val genreText = embeddedGenre(context, track)
-                val genre = if (genreText.isBlank()) "other" else MusicTags.genreKeyFromLabel(genreText)
-                val tempo = when {
-                    result.bpm in 1..89 -> MusicTags.tempos["slow"].orEmpty()
-                    result.bpm in 90..119 -> MusicTags.tempos["medium"].orEmpty()
-                    result.bpm >= 120 -> MusicTags.tempos["fast"].orEmpty()
-                    else -> ""
-                }
-                updates[key] = TrackTags(
-                    genre = genre, mood = primary, energy = result.energy, moods = moods,
-                    genreLabel = genreText, tempo = tempo, description = result.description,
-                    confidence = result.confidence, source = TrackTags.SOURCE_LOCAL,
-                    liked = old?.liked ?: 0, artist = track.artist, title = track.title,
-                    album = track.album, moodScores = result.scores, segments = result.segments,
-                    bpm = result.bpm, valence = result.valence, arousal = result.arousal,
-                    tension = result.tension, danceability = result.danceability
-                )
-            } catch (e: Exception) {
-                updates[key] = (old ?: TrackTags(
-                    genre = "other", mood = "calm", energy = 3, confidence = 0,
-                    artist = track.artist, title = track.title, album = track.album
-                )).copy(aiTried = true)
-                lastError = e.message?.take(80) ?: "не удалось прочитать один из файлов"
+        try {
+            kotlinx.coroutines.coroutineScope {
+                todo.map { track ->
+                    async {
+                        sem.withPermit {
+                            // фоновый приоритет, чтобы музыка и экран не подтормаживали
+                            try { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) } catch (_: Exception) {}
+                            val key = MusicTags.trackKey(track)
+                            val tags = analyzeOne(context, track)
+                            synchronized(lock) {
+                                updates[key] = tags
+                                done++
+                                if (updates.size >= 5 || done == todo.size) {
+                                    MusicTags.putAll(context, updates.toMap())
+                                    updates.clear()
+                                    notifyProgress(context)
+                                }
+                            }
+                        }
+                    }
+                }.awaitAll()
             }
-            done++
-            if (updates.size >= 5 || done == todo.size) {
-                if (updates.isNotEmpty()) MusicTags.putAll(context, updates.toMap())
-                updates.clear()
-                notifyProgress(context)
+        } finally {
+            // при остановке сохраняем то, что уже посчитано
+            synchronized(lock) { if (updates.isNotEmpty()) MusicTags.putAll(context, updates.toMap()) }
+        }
+    }
+
+    /** Разметка одной песни. Не бросает исключений: при ошибке песня помечается как попробованная. */
+    private fun analyzeOne(context: Context, track: MusicTrack): TrackTags {
+        val old = MusicTags.get(context, track)
+        return try {
+            val result = LocalMoodAnalyzer.analyze(context, track.uri)
+            val ordered = result.scores.entries.sortedByDescending { it.value }
+            val moods = ordered.take(3).map { it.key }.toSet()
+            val primary = ordered.firstOrNull()?.key ?: "calm"
+            val genreText = embeddedGenre(context, track)
+            val genre = if (genreText.isBlank()) "other" else MusicTags.genreKeyFromLabel(genreText)
+            val tempo = when {
+                result.bpm in 1..89 -> MusicTags.tempos["slow"].orEmpty()
+                result.bpm in 90..119 -> MusicTags.tempos["medium"].orEmpty()
+                result.bpm >= 120 -> MusicTags.tempos["fast"].orEmpty()
+                else -> ""
             }
-            kotlinx.coroutines.yield()
+            TrackTags(
+                genre = genre, mood = primary, energy = result.energy, moods = moods,
+                genreLabel = genreText, tempo = tempo, description = result.description,
+                confidence = result.confidence, source = TrackTags.SOURCE_LOCAL,
+                liked = old?.liked ?: 0, artist = track.artist, title = track.title,
+                album = track.album, moodScores = result.scores, segments = result.segments,
+                bpm = result.bpm, valence = result.valence, arousal = result.arousal,
+                tension = result.tension, danceability = result.danceability
+            )
+        } catch (e: Exception) {
+            lastError = e.message?.take(80) ?: "не удалось прочитать один из файлов"
+            (old ?: TrackTags(
+                genre = "other", mood = "calm", energy = 3, confidence = 0,
+                artist = track.artist, title = track.title, album = track.album
+            )).copy(aiTried = true)
         }
     }
 

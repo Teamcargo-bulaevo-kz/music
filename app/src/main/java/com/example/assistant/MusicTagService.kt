@@ -33,6 +33,14 @@ class MusicTagService : Service() {
         return START_NOT_STICKY
     }
 
+    /** Android 15 ограничивает фоновую обработку по времени: останавливаемся сами, разметка продолжится при следующем запуске. */
+    override fun onTimeout(startId: Int, fgsType: Int) {
+        PlayLog.add("система остановила разметку по лимиту времени, она продолжится при следующем запуске")
+        scope.cancel()
+        stopForeground(STOP_FOREGROUND_REMOVE)
+        stopSelf()
+    }
+
     override fun onDestroy() {
         scope.cancel()
         super.onDestroy()

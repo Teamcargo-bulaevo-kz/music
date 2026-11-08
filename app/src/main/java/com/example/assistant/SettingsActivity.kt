@@ -95,6 +95,7 @@ class SettingsActivity : AppCompatActivity() {
         header("Переключатели", big = true)
         switchRow("Свечение в плеере", "Цвет зависит от настроения песни, пульс идёт в такт", AppSettings.auraEnabled) { AppSettings.auraEnabled = it }
         switchRow("Свечение в списке", "Мягкий цветной фон под списком песен", AppSettings.listAura) { AppSettings.listAura = it }
+        switchRow("Пауза при отключении наушников", "Музыка встанет на паузу, если отключились наушники или Bluetooth", AppSettings.pauseOnUnplug) { AppSettings.pauseOnUnplug = it }
         switchRow("Полоса перемотки", "Показывать время и перемотку в плеере", AppSettings.showSeek) { AppSettings.showSeek = it }
         switchRow("Нравится и не нравится", "Кнопки оценки в плеере, по ним строятся подборки", AppSettings.showRating) { AppSettings.showRating = it }
     }
@@ -228,6 +229,7 @@ class SettingsActivity : AppCompatActivity() {
         }
 
         section("Разметка")
+        choiceRow("Потоков анализа", listOf("Авто", "1", "2", "3", "4"), { AppSettings.analysisWorkers }) { AppSettings.analysisWorkers = it }
         actionRow("Проверить сомнительные песни", "Песни, в которых разметка не уверена") { runInMain("review") }
         actionRow("Разметить заново", "Автоматическая разметка сотрётся, ручные правки сохранятся") { confirmRedo() }
         actionRow("Повторить неопознанные", null) { runInMain("retry") }
