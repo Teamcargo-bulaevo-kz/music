@@ -316,7 +316,13 @@ class MusicActivity : AppCompatActivity() {
             "send" -> sendToOtherAi()
             "paste" -> pasteAiAnswer()
             "share" -> shareTable()
-            "pick" -> pickTableLauncher.launch("*/*")
+            "pick" -> pickTableLauncher.launch(arrayOf("*/*"))
+            "export" -> runInBackground {
+                val ok = try { MusicCatalog.exportNow(this) } catch (e: Exception) { false }
+                if (ok && PublicFolder.supported()) "Таблица обновлена: ${PublicFolder.DISPLAY_PATH}, файл Музыка.xlsx"
+                else if (ok) "Таблица обновлена, но публичная папка есть только на Android 10 и новее. Используй «Отправить ИИ»."
+                else "Не получилось подготовить таблицу."
+            }
             "window" -> showWindowInfo()
         }
     }
@@ -508,7 +514,10 @@ class MusicActivity : AppCompatActivity() {
     }
 
     /** Файл с разметкой из любого места телефона: копируется во временную папку и разбирается как таблица. */
-    private val pickTableLauncher = registerForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri ->
+    private val pickTableLauncher = registerForActivityResult(object : androidx.activity.result.contract.ActivityResultContracts.OpenDocument() {
+        override fun createIntent(context: android.content.Context, input: Array<String>) =
+            super.createIntent(context, input).putExtra(android.provider.DocumentsContract.EXTRA_INITIAL_URI, PublicFolder.initialUri())
+    }) { uri ->
         if (uri == null) return@registerForActivityResult
         runInBackground {
             var name = "table.csv"

@@ -34,6 +34,7 @@ class SettingsActivity : AppCompatActivity() {
         const val S_ANIMATION = "animation"
         const val S_PALETTE = "palette"
         const val S_SOUND = "sound"
+        const val S_TABLE = "table"
         const val S_FOLDERS = "folders"
         const val S_ADVANCED = "advanced"
     }
@@ -62,6 +63,7 @@ class SettingsActivity : AppCompatActivity() {
             S_ANIMATION -> buildAnimation()
             S_PALETTE -> buildPalette()
             S_SOUND -> buildSound()
+            S_TABLE -> buildTable()
             S_FOLDERS -> buildFolders()
             S_ADVANCED -> buildAdvanced()
             else -> buildHome()
@@ -83,6 +85,7 @@ class SettingsActivity : AppCompatActivity() {
         navRow("Анимация", "Размер, пульс, плавность, темп") { open(S_ANIMATION) }
         navRow("Палитра", "Цвета свечения: по настроению или свои") { open(S_PALETTE) }
         navRow("Звук", "Эквалайзер и усиление баса") { open(S_SOUND) }
+        navRow("Таблица для ИИ", "Таблица песен с характеристиками в папке Документы/Harmonia") { open(S_TABLE) }
         navRow("Папки с музыкой", "Какие папки показывать и сканировать") { open(S_FOLDERS) }
         navRow("Расширенные", "Ритм, разметка, обмен с ИИ, отладка, сброс") { open(S_ADVANCED) }
         section("Музыка")
@@ -179,6 +182,30 @@ class SettingsActivity : AppCompatActivity() {
         text("Число полос и диапазон уточняются после первого запуска песни.", 12f, R.color.harmonia_muted).also { root.addView(it) }
     }
 
+    private fun buildTable() {
+        header("Таблица для ИИ", big = true)
+        text("Таблица со всеми песнями и их характеристиками (готовыми или пустыми) лежит в папке ${PublicFolder.DISPLAY_PATH}, файл «Музыка.xlsx».", 13f, R.color.harmonia_muted).also { root.addView(it) }
+        val status = text("", 13f, R.color.harmonia_cyan).also { root.addView(it) }
+        fun refresh() {
+            val t = PublicFolder.lastMirrorMs(this)
+            status.text = when {
+                !PublicFolder.supported() -> "Публичная папка работает на Android 10 и новее. Здесь доступна только отправка файла."
+                t == 0L -> "Файл ещё не создан. Нажми «Обновить таблицу»."
+                else -> "Песен в таблице: ${PublicFolder.lastRows(this)} · обновлено: " +
+                    java.text.SimpleDateFormat("dd.MM HH:mm", java.util.Locale.getDefault()).format(java.util.Date(t))
+            }
+        }
+        refresh()
+        section("Как пользоваться")
+        text("1. Обнови таблицу.\n2. Отправь файл ИИ и попроси заполнить пустые характеристики, не меняя названия колонок.\n3. Сохрани исправленный файл на телефон.\n4. Нажми «Импортировать таблицу» и выбери его. Приложение применит данные и заменит файл в папке обновлённым.", 13f, R.color.harmonia_muted).also { root.addView(it) }
+        section("Действия")
+        actionRow("Обновить таблицу", "Записать свежую таблицу в папку ${PublicFolder.DISPLAY_PATH}") { runInMain("export") }
+        actionRow("Отправить ИИ", "Поделиться файлом «Музыка.xlsx» в другое приложение") { runInMain("share") }
+        actionRow("Отправить по частям", "Текстовые части, если ИИ не принимает файл целиком") { runInMain("send") }
+        actionRow("Импортировать таблицу", "Выбрать исправленный файл (откроется папка ${PublicFolder.DISPLAY_PATH})") { runInMain("pick") }
+        actionRow("Вставить ответ ИИ", "Если ИИ ответил текстом: скопируй его и нажми сюда") { runInMain("paste") }
+    }
+
     private fun buildFolders() {
         header("Папки с музыкой", big = true)
         text("Выключенные папки не показываются в списке и не сканируются.", 13f, R.color.harmonia_muted).also { root.addView(it) }
@@ -233,12 +260,6 @@ class SettingsActivity : AppCompatActivity() {
         actionRow("Проверить сомнительные песни", "Песни, в которых разметка не уверена") { runInMain("review") }
         actionRow("Разметить заново", "Автоматическая разметка сотрётся, ручные правки сохранятся") { confirmRedo() }
         actionRow("Повторить неопознанные", null) { runInMain("retry") }
-        actionRow("Выбрать файл с разметкой", "Загрузить готовую таблицу") { runInMain("pick") }
-
-        section("Обмен с другим ИИ")
-        actionRow("Отправить песни другому ИИ", "Список песен для разметки в другом приложении") { runInMain("send") }
-        actionRow("Вставить ответ другого ИИ", null) { runInMain("paste") }
-        actionRow("Поделиться таблицей Музыка.xlsx", null) { runInMain("share") }
 
         section("Отладка")
         switchRow("Отладочный вид плеера", "Показать спектр, карту настроения, строку характеристик, вперемешку и повтор", AppSettings.debugView) { AppSettings.debugView = it }

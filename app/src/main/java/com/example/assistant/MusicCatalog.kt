@@ -139,6 +139,8 @@ object MusicCatalog {
             )
         )
         prefs(context).edit().putLong(KEY_EXPORTED, target.lastModified()).apply()
+        // копия в «Документы/Harmonia», чтобы файл можно было взять из файлового менеджера
+        try { PublicFolder.mirrorTable(context, target, rows.size - 1) } catch (_: Exception) {}
         return true
     }
 
