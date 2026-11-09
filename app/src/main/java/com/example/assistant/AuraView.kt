@@ -50,10 +50,22 @@ class AuraView @JvmOverloads constructor(
     private var treble = 0f
     private var pulse = 0f
     private var beatPhase = 0f
-    private var prevKick = 0f
-    private var kickMean = 0f
-    private var sinceBeat = 10f
-    private var bump = 0f
+    /** Детектор ударов одной полосы частот: порог над средним уровнем и пауза между ударами. */
+    private class Onset { var mean = 0f; var prev = 0f; var since = 10f; var bump = 0f }
+    private val low = Onset()
+    private val midB = Onset()
+    private val high = Onset()
+
+    private fun detect(o: Onset, v: Float, dt: Float, minGap: Float) {
+        o.mean += (v - o.mean) * (1f - exp(-0.9f * dt))
+        o.since += dt
+        val threshold = maxOf(0.45f, o.mean * 1.45f + 0.12f)
+        if (v > threshold && v - o.prev > 0.04f && o.since >= minGap) {
+            o.since = 0f
+            o.bump = maxOf(o.bump, ((v - o.mean) * 1.4f + 0.35f).coerceIn(0.25f, 1f))
+        }
+        o.prev = v
+    }
 
     private var lastMs = 0L
     private var attached = false
@@ -111,8 +123,8 @@ class AuraView @JvmOverloads constructor(
         mid = ema(mid, boost(BeatSource.mid), dt, 6f, 1.5f)
         treble = ema(treble, boost(BeatSource.treble), dt, 8f, 2f)
 
-        // Пульс только на ударах бочки (40-110 Гц), остальные частоты в пульсе не участвуют.
-        // Удар ищем по порогу над средним уровнем; чаще заданного числа раз в секунду не пульсируем,
+        // Пульс по трём полосам: низкие (бочка/бас) сильнее всего, средние слабее, высокие слабее всех (веса в настройках).
+        // Удар в каждой полосе ищем по порогу над средним уровнем; чаще заданного числа раз в секунду не пульсируем,
         // а на быстрых песнях (больше 110 BPM) пульсируем через удар.
         val live = BeatSource.isLive
         val bpm = target.bpm.coerceIn(0, 220)
@@ -120,25 +132,29 @@ class AuraView @JvmOverloads constructor(
         val period = if (bpm > 0) 60f / bpm * divisor else 0.5f
         val minGap = maxOf(1f / AppSettings.maxPulsesPerSec, period * 0.7f)
         val ampScale = (0.25f + 0.75f * reactivity.coerceIn(0f, 1f)) * (AppSettings.pulseAmplitude / 100f)
-        sinceBeat += dt
+        val wLow = AppSettings.bandLow / 100f
+        val wMid = AppSettings.bandMid / 100f
+        val wHigh = AppSettings.bandHigh / 100f
+        var raw = 0f
         if (playing && live) {
-            val kickNow = if (AppSettings.pulseSource == 1) BeatSource.bass else BeatSource.kick
-            kickMean += (kickNow - kickMean) * (1f - exp(-0.9f * dt))
-            val threshold = maxOf(0.45f, kickMean * 1.45f + 0.12f)
-            if (kickNow > threshold && kickNow - prevKick > 0.04f && sinceBeat >= minGap) {
-                sinceBeat = 0f
-                bump = maxOf(bump, ((kickNow - kickMean) * 1.4f + 0.35f).coerceIn(0.25f, 1f))
-            }
-            prevKick = kickNow
+            // Три полосы со своими детекторами ударов: низкие пульсируют сильнее, средние слабее, высокие слабее всех.
+            val lowNow = if (AppSettings.pulseSource == 1) BeatSource.bass else BeatSource.kick
+            detect(low, lowNow, dt, minGap)
+            detect(midB, BeatSource.mid, dt, maxOf(0.3f, minGap * 0.7f))
+            detect(high, BeatSource.treble, dt, maxOf(0.25f, minGap * 0.5f))
+            low.bump = ema(low.bump, 0f, dt, 1f, 2.2f)
+            midB.bump = ema(midB.bump, 0f, dt, 1f, 2.6f)
+            high.bump = ema(high.bump, 0f, dt, 1f, 3.2f)
+            raw = (wLow * low.bump + wMid * 0.7f * midB.bump + wHigh * 0.5f * high.bump).coerceIn(0f, 1f)
         } else if (playing && bpm > 0 && AppSettings.tempoLock) {
             // нет сигнала звука: ровное дыхание по темпу песни
             beatPhase = (beatPhase + dt * bpm / 60f / divisor) % 1f
-            bump = 0.7f * (0.5f * (1f + cos(beatPhase * 2f * PI.toFloat()))).pow(1.5f)
+            raw = 0.7f * wLow * (0.5f * (1f + cos(beatPhase * 2f * PI.toFloat()))).pow(1.5f)
+        } else {
+            low.bump = 0f; midB.bump = 0f; high.bump = 0f
         }
-        // «вдох» догоняет не мгновенно, «выдох» длинный: выглядит как плавное дыхание
-        if (!(playing && !live && bpm > 0 && AppSettings.tempoLock)) bump = ema(bump, 0f, dt, 1f, 2.2f)
         val smooth = AppSettings.pulseSmooth / 100f
-        pulse = ema(pulse, if (playing) bump else 0f, dt, 14f - 6f * smooth, 3.2f - 1.6f * smooth)
+        pulse = ema(pulse, if (playing) raw else 0f, dt, 14f - 6f * smooth, 3.2f - 1.6f * smooth)
         bass = pulse
 
 

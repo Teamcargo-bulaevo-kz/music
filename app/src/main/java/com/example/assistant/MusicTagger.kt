@@ -13,6 +13,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.sync.withPermit
 import kotlinx.coroutines.launch
 import java.util.concurrent.atomic.AtomicBoolean
@@ -35,6 +36,7 @@ object MusicTagger {
 
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
     private val processing = AtomicBoolean(false)
+    private val playbackGate = kotlinx.coroutines.sync.Mutex()
 
     @Volatile var running = false
         private set
@@ -247,7 +249,9 @@ object MusicTagger {
                             // фоновый приоритет, чтобы музыка и экран не подтормаживали
                             try { android.os.Process.setThreadPriority(android.os.Process.THREAD_PRIORITY_BACKGROUND) } catch (_: Exception) {}
                             val key = MusicTags.trackKey(track)
-                            val tags = analyzeOne(context, track)
+                            // пока играет музыка, декодеров должно быть как можно меньше: параллельно анализируем только на паузе
+                            val tags = if (MusicService.isRunning && PlayerState.playing) playbackGate.withLock { analyzeOne(context, track) }
+                            else analyzeOne(context, track)
                             synchronized(lock) {
                                 updates[key] = tags
                                 done++

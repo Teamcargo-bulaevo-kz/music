@@ -71,6 +71,17 @@ object AppSettings {
         get() = if (ready()) sp.getInt("max_pulses", 2).coerceIn(1, 4) else 2
         set(v) = sp.edit().putInt("max_pulses", v.coerceIn(1, 4)).apply()
 
+    /** Вклад частот в пульс, 0..150 %: низкие (удары, бас), средние (голос, гитары), высокие (тарелки). */
+    var bandLow: Int
+        get() = if (ready()) sp.getInt("band_low", 100).coerceIn(0, 150) else 100
+        set(v) = sp.edit().putInt("band_low", v.coerceIn(0, 150)).apply()
+    var bandMid: Int
+        get() = if (ready()) sp.getInt("band_mid", 50).coerceIn(0, 150) else 50
+        set(v) = sp.edit().putInt("band_mid", v.coerceIn(0, 150)).apply()
+    var bandHigh: Int
+        get() = if (ready()) sp.getInt("band_high", 25).coerceIn(0, 150) else 25
+        set(v) = sp.edit().putInt("band_high", v.coerceIn(0, 150)).apply()
+
     /** Подстраивать пульс под темп песни (BPM) и держать его в такт ударам. */
     var tempoLock: Boolean
         get() = !ready() || sp.getBoolean("tempo_lock", true)

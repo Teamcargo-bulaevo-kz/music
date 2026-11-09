@@ -137,6 +137,11 @@ class SettingsActivity : AppCompatActivity() {
         sliderRow("Яркость свечения", 30, 100, 10, AppSettings.auraBrightness, "%") { AppSettings.auraBrightness = it }
         sliderRow("Размер свечения", 60, 150, 10, AppSettings.glowSize, "%") { AppSettings.glowSize = it }
         sliderRow("Размах пульса", 30, 150, 10, AppSettings.pulseAmplitude, "%") { AppSettings.pulseAmplitude = it }
+        section("Ритм: вклад частот")
+        sliderRow("Низкие (удары, бас)", 0, 150, 10, AppSettings.bandLow, "%") { AppSettings.bandLow = it }
+        sliderRow("Средние (голос, гитары)", 0, 150, 10, AppSettings.bandMid, "%") { AppSettings.bandMid = it }
+        sliderRow("Высокие (тарелки, шипящие)", 0, 150, 10, AppSettings.bandHigh, "%") { AppSettings.bandHigh = it }
+        section("Ритм: пульс")
         choiceRow("Чем пульсировать", listOf("Только удары бочки", "Весь бас"), { AppSettings.pulseSource }) { AppSettings.pulseSource = it }
         sliderRow("Пульсов в секунду не больше", 1, 4, 1, AppSettings.maxPulsesPerSec, "") { AppSettings.maxPulsesPerSec = it }
         sliderRow("Плавность пульса", 0, 100, 10, AppSettings.pulseSmooth, "%") { AppSettings.pulseSmooth = it }

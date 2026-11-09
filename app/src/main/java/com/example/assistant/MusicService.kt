@@ -69,6 +69,8 @@ class MusicService : Service() {
     private val sleepRunnable = Runnable { pause(); PlayerState.sleepAtMs = 0L }
     private var index = 0
     private var errorsInRow = 0
+    private var errorRetries = 0
+    private var resumeAtMs = 0
     private var resumeOnFocusGain = false
 
     private val focusRequest: AudioFocusRequest by lazy {
@@ -178,6 +180,8 @@ class MusicService : Service() {
                 shuffleOn = false
                 index = intent.getIntExtra(EXTRA_INDEX, 0)
                 errorsInRow = 0
+                errorRetries = 0
+                resumeAtMs = 0
                 playCurrent()
             }
             ACTION_PAUSE -> pause()
@@ -236,6 +240,7 @@ class MusicService : Service() {
                 if (player === it) {
                     errorsInRow = 0
                     prepared = true
+                    if (resumeAtMs > 0) { try { it.seekTo(resumeAtMs) } catch (_: Exception) {}; resumeAtMs = 0 }
                     if (wantPlay) it.start()
                     BeatSource.attach(it.audioSessionId)
                     EqualizerManager.attach(it.audioSessionId)
@@ -243,11 +248,23 @@ class MusicService : Service() {
                 }
             }
             mp.setOnCompletionListener {
-                if (player === it) { PlayLog.add("трек закончился"); next(auto = true) }
+                if (player === it) { PlayLog.add("трек закончился"); errorRetries = 0; next(auto = true) }
             }
             mp.setOnErrorListener { failed, what, extra ->
                 PlayLog.add("ошибка плеера: код $what/$extra")
-                if (player === failed) skipBroken()
+                if (player === failed) {
+                    // Сбой во время игры (например, декодеру не хватило ресурсов): два раза пробуем продолжить с того же места,
+                    // и только потом пропускаем песню. Так трек не перескакивает сам.
+                    val pos = try { if (prepared) failed.currentPosition else 0 } catch (_: Exception) { 0 }
+                    if (prepared && errorRetries < 2) {
+                        errorRetries++
+                        PlayLog.add("ошибка плеера: пробую продолжить с ${pos / 1000} с (попытка $errorRetries)")
+                        val w = wantPlay
+                        resumeAtMs = pos
+                        playCurrent()
+                        wantPlay = w
+                    } else skipBroken()
+                }
                 true
             }
             player = mp
@@ -374,6 +391,8 @@ class MusicService : Service() {
         if (i !in queue.indices) return
         index = i
         errorsInRow = 0
+        errorRetries = 0
+        resumeAtMs = 0
         playCurrent()
     }
 
