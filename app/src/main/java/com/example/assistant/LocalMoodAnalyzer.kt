@@ -11,7 +11,7 @@ import kotlin.math.*
 
 data class MoodAnalysis(val scores: Map<String, Int>, val energy: Int, val bpm: Int, val confidence: Int, val description: String, val valence: Int = 50, val arousal: Int = 50, val tension: Int = 50, val danceability: Int = 0, val segments: List<MoodSegment> = emptyList())
 data class RepeatedFragment(val firstStartSeconds: Int, val secondStartSeconds: Int, val similarity: Int)
-data class AudioFeatures(val rms: Double, val centroid: Double, val low: Double, val high: Double, val flatness: Double, val flux: Double, val beat: Double, val bpm: Int, val dynamics: Double, val count: Int, val durationSeconds: Double = 0.0, val variation: Double = 0.0, val beatAccent: Double = 0.0)
+data class AudioFeatures(val rms: Double, val centroid: Double, val low: Double, val high: Double, val flatness: Double, val flux: Double, val beat: Double, val bpm: Int, val dynamics: Double, val count: Int, val durationSeconds: Double = 0.0, val variation: Double = 0.0, val beatAccent: Double = 0.0, val modeMajor: Double = 0.5, val tonalClarity: Double = 0.0)
 
 /** Локальный анализ PCM: сеть, Groq и внешние модели не используются. */
 object LocalMoodAnalyzer {
@@ -241,11 +241,88 @@ object LocalMoodAnalyzer {
         val fps = sampleRate.toDouble() / hop
         val beat=detectBeat(fluxes,fps)
         val accent = estimateBeatAccent(fluxes, fps, beat.second)
+        val tonal = estimateMode(x, sampleRate)
         val meanEnv=env.average().coerceAtLeast(1e-9)
         val variation=if(env.isNotEmpty())sqrt(env.map{(it-meanEnv)*(it-meanEnv)}.average())/meanEnv else 0.0
-        return AudioFeatures(sqrt(sumSq/max(1,x.size)),centers.average().finiteOrZero(),lows.average().finiteOrZero(),highs.average().finiteOrZero(),flats.average().finiteOrZero(),fluxes.average().finiteOrZero(),beat.first,beat.second,dynamics,x.size,x.size.toDouble()/sampleRate,variation.finiteOrZero(),accent)
+        return AudioFeatures(sqrt(sumSq/max(1,x.size)),centers.average().finiteOrZero(),lows.average().finiteOrZero(),highs.average().finiteOrZero(),flats.average().finiteOrZero(),fluxes.average().finiteOrZero(),beat.first,beat.second,dynamics,x.size,x.size.toDouble()/sampleRate,variation.finiteOrZero(),accent,tonal.first,tonal.second)
     }
     private fun Double.finiteOrZero()=if(isFinite())this else 0.0
+
+    // Профили тональности Крумхансла-Кесслера (интенсивность 12 нот относительно тоники).
+    private val KEY_MAJOR = doubleArrayOf(6.35, 2.23, 3.48, 2.33, 4.38, 4.09, 2.52, 5.19, 2.39, 3.66, 2.29, 2.88)
+    private val KEY_MINOR = doubleArrayOf(6.33, 2.68, 3.52, 5.38, 2.60, 3.53, 2.54, 4.75, 3.98, 2.69, 3.34, 3.17)
+
+    private fun fftInPlace(re: DoubleArray, im: DoubleArray) {
+        val n = re.size
+        var j = 0
+        for (i in 1 until n) {
+            var bit = n shr 1
+            while (j and bit != 0) { j = j xor bit; bit = bit shr 1 }
+            j = j xor bit
+            if (i < j) { val t = re[i]; re[i] = re[j]; re[j] = t; val u = im[i]; im[i] = im[j]; im[j] = u }
+        }
+        var len = 2
+        while (len <= n) {
+            val angle = -2 * PI / len
+            val wr0 = cos(angle); val wi0 = sin(angle)
+            var base = 0
+            while (base < n) {
+                var wr = 1.0; var wi = 0.0
+                for (k in 0 until len / 2) {
+                    val e = base + k; val o = e + len / 2
+                    val tr = wr * re[o] - wi * im[o]; val ti = wr * im[o] + wi * re[o]
+                    re[o] = re[e] - tr; im[o] = im[e] - ti; re[e] += tr; im[e] += ti
+                    val nw = wr * wr0 - wi * wi0; wi = wr * wi0 + wi * wr0; wr = nw
+                }
+                base += len
+            }
+            len *= 2
+        }
+    }
+
+    private fun pearson(a: DoubleArray, b: DoubleArray): Double {
+        val ma = a.average(); val mb = b.average()
+        var ab = 0.0; var aa = 0.0; var bb = 0.0
+        for (i in a.indices) { val da = a[i] - ma; val db = b[i] - mb; ab += da * db; aa += da * da; bb += db * db }
+        return if (aa > 1e-12 && bb > 1e-12) ab / sqrt(aa * bb) else 0.0
+    }
+
+    /**
+     * Мажор или минор по хромаграмме (энергия 12 нот в диапазоне 130-2000 Гц) и профилям тональности.
+     * Возвращает (мажорность 0..1, где 0.5 неясно; ясность тональности 0..1). У шума и ударных без мелодии
+     * ясность около нуля, и ладовая поправка в classify почти не действует.
+     */
+    internal fun estimateMode(x: FloatArray, sampleRate: Int): Pair<Double, Double> {
+        val n = 4096
+        val hop = 8192
+        if (x.size < n * 3 || sampleRate <= 0) return 0.5 to 0.0
+        val pitchClass = IntArray(n / 2 + 1) { bin ->
+            val hz = bin.toDouble() * sampleRate / n
+            if (hz < 130.0 || hz > 2000.0) -1 else ((12.0 * ln(hz / 440.0) / ln(2.0)).roundToInt() + 9).mod(12)
+        }
+        val window = DoubleArray(n) { .5 - .5 * cos(2 * PI * it / (n - 1)) }
+        val chroma = DoubleArray(12)
+        val re = DoubleArray(n); val im = DoubleArray(n)
+        var pos = 0
+        while (pos + n <= x.size) {
+            for (j in 0 until n) { re[j] = x[pos + j] * window[j]; im[j] = 0.0 }
+            fftInPlace(re, im)
+            for (bin in 1..n / 2) {
+                val pc = pitchClass[bin]
+                if (pc >= 0) chroma[pc] += sqrt(re[bin] * re[bin] + im[bin] * im[bin])
+            }
+            pos += hop
+        }
+        if (chroma.sum() <= 1e-9) return 0.5 to 0.0
+        var bestMajor = -1.0; var bestMinor = -1.0
+        for (tonic in 0 until 12) {
+            bestMajor = max(bestMajor, pearson(chroma, DoubleArray(12) { KEY_MAJOR[(it - tonic + 12) % 12] }))
+            bestMinor = max(bestMinor, pearson(chroma, DoubleArray(12) { KEY_MINOR[(it - tonic + 12) % 12] }))
+        }
+        val major = (0.5 + (bestMajor - bestMinor) * 1.2).coerceIn(0.0, 1.0)
+        val clarity = ((max(bestMajor, bestMinor) - 0.45) / 0.45).coerceIn(0.0, 1.0)
+        return major to clarity
+    }
 
     /**
      * Оценивает акцент сильной доли относительно слабой по спектральным атакам.
@@ -320,20 +397,22 @@ object LocalMoodAnalyzer {
         val bright=u(f.centroid/6500);val rhythm=u((f.beat-.07)/.55) * (.65 + .35 * u(f.beatAccent * 2.0));val smooth=1-u(f.flatness*2.2);val stable=1-u(f.dynamics/8)
         val dance=if(f.bpm in 100..140)1.0 else 1-min(1.0,abs(f.bpm-120)/75.0)
         // Двухосевая модель: валентность и возбуждение дополняют, но не подменяют теги настроения.
-        val valence=u(.38*bright+.28*smooth+.20*energy+.14*(1-u(f.low*1.8)))
+        // Лад: положительное значение это мажор, отрицательное минор; без ясной тональности остаётся около нуля.
+        val modeShift=(u(f.modeMajor)-.5)*2*u(f.tonalClarity)
+        val valence=u(.32*bright+.24*smooth+.18*energy+.12*(1-u(f.low*1.8))+.14*(.5+.5*modeShift))
         val arousal=u(.55*energy+.25*rhythm+.20*u(f.variation/2.5))
         val tension=u(.35*f.flatness+.25*u(f.flux*3)+.22*u(f.dynamics/8)+.18*(1-smooth))
         val danceability=u(.42*dance+.30*rhythm+.18*energy+.10*u(f.beatAccent*2.0))
         val raw=linkedMapOf(
             "energetic" to (.12+.45*energy+.22*rhythm+.21*u(f.flux*3)),
             "calm" to (.12+.42*(1-energy)+.24*stable+.22*(1-bright)),
-            "happy" to (.12+.30*bright+.28*energy+.22*rhythm+.08*smooth),
-            "sad" to (.10+.38*(1-energy)+.22*(1-bright)+.18*(1-smooth)),
+            "happy" to (.12+.30*bright+.28*energy+.22*rhythm+.08*smooth+.14*max(0.0,modeShift)),
+            "sad" to (.10+.38*(1-energy)+.22*(1-bright)+.18*(1-smooth)+.18*max(0.0,-modeShift)),
             "romantic" to (.12+.30*smooth+.25*(1-energy)+.18*stable+.15*(1-f.high)),
             "dance" to (.10+.38*dance+.34*rhythm+.18*energy),
             "focus" to (.12+.34*stable+.28*(1-energy)+.18*smooth),
             "epic" to (.10+.38*energy+.24*f.dynamics.coerceAtMost(4.0)/4+.18*(1-f.low)),
-            "dark" to (.10+.28*(1-bright)+.24*f.low+.22*energy+.16*f.flatness)
+            "dark" to (.10+.28*(1-bright)+.24*f.low+.22*energy+.16*f.flatness+.08*max(0.0,-modeShift))
         )
         val top=raw.values.maxOrNull()?:1.0;val ex=raw.mapValues{kotlin.math.exp((it.value-top)/.24)};val total=ex.values.sum()
         val exact=ex.mapValues{it.value/total*100};val scores=exact.mapValues{floor(it.value).toInt()}.toMutableMap()
@@ -350,7 +429,7 @@ object LocalMoodAnalyzer {
             ).roundToInt().coerceIn(15, 85)
         val level=(1+(energy*4).roundToInt()).coerceIn(1,5)
         val desc=(if(f.bpm>0)f.bpm.toString()+" BPM · " else "")+
-            "позитивность "+(valence*100).roundToInt()+"% · возбуждение "+(arousal*100).roundToInt()+"% · напряжение "+(tension*100).roundToInt()+"% · танцевальность "+(danceability*100).roundToInt()+"%"
+            (if(f.tonalClarity>=.4)(if(f.modeMajor>=.5)"мажор · " else "минор · ") else "")+"позитивность "+(valence*100).roundToInt()+"% · возбуждение "+(arousal*100).roundToInt()+"% · напряжение "+(tension*100).roundToInt()+"% · танцевальность "+(danceability*100).roundToInt()+"%"
         return MoodAnalysis(scores,level,f.bpm,confidence,desc,(valence*100).roundToInt(),(arousal*100).roundToInt(),(tension*100).roundToInt(),(danceability*100).roundToInt())
     }
 }

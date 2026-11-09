@@ -277,7 +277,9 @@ object MusicTagger {
         return try {
             val result = LocalMoodAnalyzer.analyze(context, track.uri)
             val ordered = result.scores.entries.sortedByDescending { it.value }
-            val moods = ordered.take(3).map { it.key }.toSet()
+            // Второй и третий теги только если они заметны: не меньше 12 баллов и не меньше 40% от главного.
+            val topScore = ordered.firstOrNull()?.value ?: 0
+            val moods = ordered.take(3).filterIndexed { i, e -> i == 0 || (e.value >= 12 && e.value >= topScore * 0.4) }.map { it.key }.toSet()
             val primary = ordered.firstOrNull()?.key ?: "calm"
             val genreText = embeddedGenre(context, track)
             val genre = if (genreText.isBlank()) "other" else MusicTags.genreKeyFromLabel(genreText)

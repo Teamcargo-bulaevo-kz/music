@@ -167,4 +167,43 @@ class LocalMoodAnalyzerTest {
         assertEquals(listOf(15.0, 10.0, 8.75, 11.25), weights)
     }
 
+    private fun progression(roots: List<Int>, third: Int, rate: Int): FloatArray {
+        val perChord = rate * 5
+        val out = FloatArray(perChord * roots.size)
+        for ((c, root) in roots.withIndex()) {
+            val freqs = listOf(root - 12, root, root + third, root + 7).map { 440.0 * Math.pow(2.0, (it - 69) / 12.0) }
+            for (i in 0 until perChord) {
+                var v = 0.0
+                for (fq in freqs) v += sin(2.0 * PI * fq * i / rate)
+                out[c * perChord + i] = (v * 0.1).toFloat()
+            }
+        }
+        return out
+    }
+
+    @Test fun detectsMajorAndMinorMode() {
+        val rate = 11025
+        val major = LocalMoodAnalyzer.estimateMode(progression(listOf(60, 65, 67, 60), 4, rate), rate)
+        val minor = LocalMoodAnalyzer.estimateMode(progression(listOf(57, 62, 64, 57), 3, rate), rate)
+        assertTrue("major=${major.first}", major.first > 0.7 && major.second > 0.5)
+        assertTrue("minor=${minor.first}", minor.first < 0.4 && minor.second > 0.5)
+    }
+
+    @Test fun noiseHasNoClearTonality() {
+        val rate = 11025
+        val random = java.util.Random(1)
+        val noise = FloatArray(rate * 20) { (random.nextGaussian() * 0.1).toFloat() }
+        assertTrue(LocalMoodAnalyzer.estimateMode(noise, rate).second < 0.3)
+    }
+
+    @Test fun majorModeFavoursHappyAndMinorFavoursSad() {
+        val base = AudioFeatures(0.06, 2200.0, 0.3, 0.08, 0.12, 0.1, 0.3, 100, 2.0, 22050, 60.0)
+        val major = LocalMoodAnalyzer.classify(base.copy(modeMajor = 0.95, tonalClarity = 1.0))
+        val minor = LocalMoodAnalyzer.classify(base.copy(modeMajor = 0.05, tonalClarity = 1.0))
+        assertTrue(major.scores.getValue("happy") > minor.scores.getValue("happy"))
+        assertTrue(minor.scores.getValue("sad") > major.scores.getValue("sad"))
+        assertTrue(major.valence > minor.valence)
+        assertEquals(100, major.scores.values.sum())
+        assertEquals(100, minor.scores.values.sum())
+    }
 }
