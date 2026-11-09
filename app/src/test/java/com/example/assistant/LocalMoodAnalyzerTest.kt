@@ -206,4 +206,16 @@ class LocalMoodAnalyzerTest {
         assertEquals(100, major.scores.values.sum())
         assertEquals(100, minor.scores.values.sum())
     }
+    @Test fun tempoIsRefinedToWithinThreeBpm() {
+        val rate = 22050
+        for ((period, expected) in listOf(0.5 to 120, 0.4 to 150)) {
+            val samples = FloatArray(rate * 20) { i ->
+                val time = i.toDouble() / rate
+                val pulse = if (time % period < 0.055) 0.32 else 0.004
+                (pulse * sin(2.0 * PI * 880.0 * time)).toFloat()
+            }
+            val actual = LocalMoodAnalyzer.extractFeatures(samples, rate).bpm
+            assertTrue("Expected $expected +-3 BPM, got $actual", actual in (expected - 3)..(expected + 3))
+        }
+    }
 }

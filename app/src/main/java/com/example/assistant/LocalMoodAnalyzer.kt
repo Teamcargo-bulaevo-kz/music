@@ -357,6 +357,30 @@ object LocalMoodAnalyzer {
         return best.coerceIn(0.0, 1.0)
     }
 
+    /** Ищет максимум корреляции рядом с выбранным темпом (+-8 %) с шагом 0,5 BPM и дробным сдвигом. */
+    private fun refineTempo(x: List<Double>, fps: Double, bpm: Int): Int {
+        if (bpm <= 0) return bpm
+        var bestBpm = bpm.toDouble()
+        var bestCorr = -2.0
+        var candidate = bpm * 0.92
+        val end = bpm * 1.08
+        while (candidate <= end) {
+            val lag = fps * 60.0 / candidate
+            var cross = 0.0; var aa = 0.0; var bb = 0.0
+            for (i in ceil(lag).toInt() until x.size) {
+                val pos = i - lag
+                val i0 = floor(pos).toInt()
+                val frac = pos - i0
+                val past = x[i0] * (1.0 - frac) + x[min(i0 + 1, x.size - 1)] * frac
+                cross += x[i] * past; aa += x[i] * x[i]; bb += past * past
+            }
+            val corr = if (aa > 0 && bb > 0) cross / sqrt(aa * bb) else 0.0
+            if (corr > bestCorr) { bestCorr = corr; bestBpm = candidate }
+            candidate += 0.5
+        }
+        return bestBpm.roundToInt().coerceIn(60, 180)
+    }
+
     private fun detectBeat(onsets:List<Double>,fps:Double):Pair<Double,Int>{
         if(onsets.size<80)return 0.0 to 0
         // Нормируем onset envelope: отдельные громкие удары не должны доминировать над всей записью.
@@ -384,7 +408,8 @@ object LocalMoodAnalyzer {
         // Не притягиваем результат к 120 BPM: выбираем фактический максимум
         // корреляции. Иначе широкий набор близких пиков систематически смещал
         // медленные и быстрые композиции к условно «среднему» темпу.
-        val selected = octaveCorrected
+        // Автокорреляция по целым кадрам даёт шаг 2-5 % (120 BPM выходило как 113): уточняем темп дробным сдвигом.
+        val selected = refineTempo(x, fps, octaveCorrected)
         // Слабая корреляция — это отсутствие надёжного ритмического пульса, а не случайный BPM.
         val reliableTempo = if (best >= 0.12) selected else 0
         return best.coerceIn(0.0,1.0) to reliableTempo
