@@ -134,6 +134,18 @@ class SettingsActivity : AppCompatActivity() {
     private fun buildAnimation() {
         header("Анимация", big = true)
         addPreview()
+        choiceRow("Готовый стиль", listOf("Спокойный", "Обычный", "Резкий"), { -1 }) { i ->
+            val p = listOf(
+                intArrayOf(60, 80, 30, 30, 120, 1, 100, 30, 10, 70, 40),
+                intArrayOf(100, 50, 50, 50, 100, 2, 100, 50, 25, 100, 20),
+                intArrayOf(130, 20, 80, 70, 90, 3, 100, 70, 40, 120, 0)
+            )[i]
+            AppSettings.pulseAmplitude = p[0]; AppSettings.pulseSmooth = p[1]; AppSettings.pulseAttack = p[2]
+            AppSettings.pulseRelease = p[3]; AppSettings.onsetThreshold = p[4]; AppSettings.maxPulsesPerSec = p[5]
+            AppSettings.bandLow = p[6]; AppSettings.bandMid = p[7]; AppSettings.bandHigh = p[8]
+            AppSettings.brightnessPulse = p[9]; AppSettings.idleBreath = p[10]
+            recreate()
+        }
         sliderRow("Яркость свечения", 30, 100, 10, AppSettings.auraBrightness, "%") { AppSettings.auraBrightness = it }
         sliderRow("Размер свечения", 60, 150, 10, AppSettings.glowSize, "%") { AppSettings.glowSize = it }
         sliderRow("Размах пульса", 30, 150, 10, AppSettings.pulseAmplitude, "%") { AppSettings.pulseAmplitude = it }
@@ -145,6 +157,11 @@ class SettingsActivity : AppCompatActivity() {
         choiceRow("Чем пульсировать", listOf("Только удары бочки", "Весь бас"), { AppSettings.pulseSource }) { AppSettings.pulseSource = it }
         sliderRow("Пульсов в секунду не больше", 1, 4, 1, AppSettings.maxPulsesPerSec, "") { AppSettings.maxPulsesPerSec = it }
         sliderRow("Плавность пульса", 0, 100, 10, AppSettings.pulseSmooth, "%") { AppSettings.pulseSmooth = it }
+        sliderRow("Порог срабатывания (больше, тем реже)", 50, 150, 10, AppSettings.onsetThreshold, "%") { AppSettings.onsetThreshold = it }
+        sliderRow("Скорость нарастания", 0, 100, 10, AppSettings.pulseAttack, "%") { AppSettings.pulseAttack = it }
+        sliderRow("Скорость затухания", 0, 100, 10, AppSettings.pulseRelease, "%") { AppSettings.pulseRelease = it }
+        sliderRow("Размах яркости", 0, 150, 10, AppSettings.brightnessPulse, "%") { AppSettings.brightnessPulse = it }
+        sliderRow("Дыхание между ударами", 0, 100, 10, AppSettings.idleBreath, "%") { AppSettings.idleBreath = it }
         sliderRow("Чувствительность к ритму", 50, 150, 10, AppSettings.beatSensitivity, "%") { AppSettings.beatSensitivity = it }
         switchRow("Пульс по темпу песни", "Держит дыхание в такт ударам и BPM песни", AppSettings.tempoLock) { AppSettings.tempoLock = it }
         choiceRow("Частота кадров", listOf("20", "30", "60"), { listOf(20, 30, 60).indexOf(AppSettings.fps).coerceAtLeast(1) }) { AppSettings.fps = listOf(20, 30, 60)[it] }
@@ -282,7 +299,7 @@ class SettingsActivity : AppCompatActivity() {
         section("Сброс")
         actionRow("Сбросить настройки вида", "Папки, размеры и свечение вернутся к исходным") {
             AlertDialog.Builder(this).setTitle("Сбросить настройки?")
-                .setPositiveButton("Сбросить") { _, _ -> AppSettings.resetAll(); MusicLibrary.invalidate(); recreate() }
+                .setPositiveButton("Сбросить") { _, _ -> AppSettings.resetAll(); EqualizerManager.apply(); MusicLibrary.invalidate(); recreate() }
                 .setNegativeButton("Отмена", null).show()
         }
     }
@@ -424,12 +441,17 @@ class SettingsActivity : AppCompatActivity() {
         val (row, col) = rowLayout(title, null)
         val value = TextView(this).apply { textSize = 14f; setTextColor(getColor(R.color.harmonia_cyan)); text = "$now$unit" }
         row.addView(value)
+        var touching = false
         val bar = SeekBar(this).apply {
             this.max = (max - min) / step; progress = (now - min) / step
             setOnSeekBarChangeListener(object : SeekBar.OnSeekBarChangeListener {
-                override fun onProgressChanged(b: SeekBar, p: Int, fromUser: Boolean) { if (fromUser) value.text = "${min + p * step}$unit" }
-                override fun onStartTrackingTouch(b: SeekBar) {}
-                override fun onStopTrackingTouch(b: SeekBar) { set(min + b.progress * step) }
+                override fun onProgressChanged(b: SeekBar, p: Int, fromUser: Boolean) {
+                    if (fromUser) value.text = "${min + p * step}$unit"
+                    // клавиатура, джойстик и TalkBack: касания нет, сохраняем сразу
+                    if (fromUser && !touching) set(min + p * step)
+                }
+                override fun onStartTrackingTouch(b: SeekBar) { touching = true }
+                override fun onStopTrackingTouch(b: SeekBar) { touching = false; set(min + b.progress * step) }
             })
         }
         col.addView(bar)

@@ -242,7 +242,7 @@ class MusicService : Service() {
                     prepared = true
                     if (resumeAtMs > 0) { try { it.seekTo(resumeAtMs) } catch (_: Exception) {}; resumeAtMs = 0 }
                     if (wantPlay) it.start()
-                    BeatSource.attach(it.audioSessionId)
+                    if (AppSettings.auraEnabled || AppSettings.listAura || AppSettings.debugView) BeatSource.attach(it.audioSessionId)
                     EqualizerManager.attach(it.audioSessionId)
                     refreshState()
                 }
@@ -330,6 +330,7 @@ class MusicService : Service() {
         // или запускать случайную очередь после пересоздания службы.
         val current = player ?: return
         handler.removeCallbacks(idleStop)
+        current.setVolume(1f, 1f) // после приглушения другим приложением громкость не должна остаться 20 %
         PlayLog.add("продолжить")
         if (!prepared) {
             wantPlay = true

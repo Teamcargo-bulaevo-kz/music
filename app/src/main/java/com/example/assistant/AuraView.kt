@@ -56,10 +56,13 @@ class AuraView @JvmOverloads constructor(
     private val midB = Onset()
     private val high = Onset()
 
+    private var thr = 1f
+    private var breathT = 0f
+
     private fun detect(o: Onset, v: Float, dt: Float, minGap: Float) {
         o.mean += (v - o.mean) * (1f - exp(-0.9f * dt))
         o.since += dt
-        val threshold = maxOf(0.45f, o.mean * 1.45f + 0.12f)
+        val threshold = maxOf(0.45f, o.mean * 1.45f + 0.12f) * thr
         if (v > threshold && v - o.prev > 0.04f && o.since >= minGap) {
             o.since = 0f
             o.bump = maxOf(o.bump, ((v - o.mean) * 1.4f + 0.35f).coerceIn(0.25f, 1f))
@@ -132,6 +135,7 @@ class AuraView @JvmOverloads constructor(
         val period = if (bpm > 0) 60f / bpm * divisor else 0.5f
         val minGap = maxOf(1f / AppSettings.maxPulsesPerSec, period * 0.7f)
         val ampScale = (0.25f + 0.75f * reactivity.coerceIn(0f, 1f)) * (AppSettings.pulseAmplitude / 100f)
+        thr = AppSettings.onsetThreshold / 100f
         val wLow = AppSettings.bandLow / 100f
         val wMid = AppSettings.bandMid / 100f
         val wHigh = AppSettings.bandHigh / 100f
@@ -153,8 +157,14 @@ class AuraView @JvmOverloads constructor(
         } else {
             low.bump = 0f; midB.bump = 0f; high.bump = 0f
         }
+        // дыхание между ударами: медленное колебание, чтобы свечение не застывало на спокойных песнях
+        breathT = (breathT + dt) % 6f
+        val breath = 0.5f + 0.5f * kotlin.math.sin(breathT / 6f * 2f * PI.toFloat())
+        raw = maxOf(raw, 0.18f * (AppSettings.idleBreath / 100f) * breath)
         val smooth = AppSettings.pulseSmooth / 100f
-        pulse = ema(pulse, if (playing) raw else 0f, dt, 14f - 6f * smooth, 3.2f - 1.6f * smooth)
+        val atk = 0.4f + 1.2f * (AppSettings.pulseAttack / 100f)
+        val rel = 0.4f + 1.2f * (AppSettings.pulseRelease / 100f)
+        pulse = ema(pulse, if (playing) raw else 0f, dt, (14f - 6f * smooth) * atk, (3.2f - 1.6f * smooth) * rel)
         bass = pulse
 
 
@@ -168,7 +178,7 @@ class AuraView @JvmOverloads constructor(
         // дыхание: радиус от базового размера до базового + размах, яркость тоже чуть дышит
         val size = AppSettings.glowSize / 100f
         val outerR = cr * (2.0f * size + 1.0f * ampScale * pulse)
-        val a = (gain * (0.50f + 0.40f * pulse * ampScale.coerceAtMost(1.2f)) * (0.85f + 0.15f * brightness)).coerceIn(0f, 1f)
+        val a = (gain * (0.50f + 0.40f * pulse * ampScale.coerceAtMost(1.2f) * (AppSettings.brightnessPulse / 100f)) * (0.85f + 0.15f * brightness)).coerceIn(0f, 1f)
         val f = (cr / outerR).coerceIn(0.05f, 0.9f)
 
         // оттенок задан настроением; соседние цвета расходятся от центра на фиксированные углы

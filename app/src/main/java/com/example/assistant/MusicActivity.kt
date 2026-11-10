@@ -181,6 +181,7 @@ class MusicActivity : AppCompatActivity() {
             foldersSeen = AppSettings.disabledFolders
             if (allTracks.isNotEmpty()) loadLibrary()
         } else if (allTracks.isNotEmpty()) rebuild()
+        else if (hasAudioAccess()) { status.visibility = View.GONE; loadLibrary() }
     }
 
     private var foldersSeen: Set<String> = emptySet()
@@ -247,7 +248,7 @@ class MusicActivity : AppCompatActivity() {
         }
         if (hasAudioAccess()) loadLibrary() else {
             status.visibility = View.VISIBLE
-            status.text = "Нет доступа к аудио. Разреши его в настройках приложения «Музыка»."
+            status.text = "Нет доступа к аудио. Разреши его в настройках приложения Harmonia (Настройки телефона, Приложения, Harmonia, Разрешения)."
         }
     }
 

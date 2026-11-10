@@ -161,6 +161,9 @@ object MusicTagger {
     suspend fun runLocked(context: Context) {
         try {
             runPhases(context)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            lastError = "остановлено системой, продолжится при следующем запуске"
+            throw e
         } catch (e: Exception) {
             lastError = e.message?.take(100) ?: "ошибка"
         } finally {

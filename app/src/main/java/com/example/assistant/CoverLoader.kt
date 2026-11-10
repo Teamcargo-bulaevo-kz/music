@@ -49,7 +49,10 @@ object CoverLoader {
             CoverStore.State.DEFAULT -> when (AppSettings.coverSource) {
                 2 -> null
                 1 -> embedded(app, track, px)
-                else -> try { app.contentResolver.loadThumbnail(track.uri, Size(px, px), null) } catch (e: Exception) { null }
+                // loadThumbnail появился в Android 10; на Android 8-9 берём картинку из самого файла
+                else -> if (android.os.Build.VERSION.SDK_INT >= 29) {
+                    try { app.contentResolver.loadThumbnail(track.uri, Size(px, px), null) } catch (e: Exception) { null }
+                } else embedded(app, track, px)
             }
         }
     }

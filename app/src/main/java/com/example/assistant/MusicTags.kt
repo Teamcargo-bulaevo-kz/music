@@ -254,7 +254,8 @@ object MusicTags {
     // ---------------------------------------------------------------- хранение
 
     private const val FILE_NAME = "music_tags.json"
-    @Volatile private var cache: MutableMap<String, TrackTags>? = null
+    // Копия при записи: читатели получают целую карту без блокировки и не ловят ConcurrentModificationException.
+    @Volatile private var cache: Map<String, TrackTags>? = null
 
     fun trackKey(artist: String, title: String): String = TextMatch.normalize("$artist $title")
     fun trackKey(t: MusicTrack): String = trackKey(t.artist, t.title)
@@ -304,8 +305,10 @@ object MusicTags {
         )
     }
 
+    private fun loaded(context: Context): Map<String, TrackTags> = cache ?: load(context)
+
     @Synchronized
-    private fun loaded(context: Context): MutableMap<String, TrackTags> {
+    private fun load(context: Context): Map<String, TrackTags> {
         cache?.let { return it }
         val map = LinkedHashMap<String, TrackTags>()
         val f = file(context)
@@ -342,8 +345,9 @@ object MusicTags {
     /** Сохраняет пачку тегов и просит таблицу Музыка.xlsx обновиться (с задержкой). */
     @Synchronized
     fun putAll(context: Context, tags: Map<String, TrackTags>, export: Boolean = true) {
-        val map = loaded(context)
+        val map = LinkedHashMap(loaded(context))
         map.putAll(tags)
+        cache = map
         persist(context, map)
         if (export) MusicCatalog.scheduleExport(context)
     }
@@ -392,7 +396,7 @@ object MusicTags {
      */
     @Synchronized
     fun resetAuto(context: Context): Int {
-        val map = loaded(context)
+        val map = LinkedHashMap(loaded(context))
         var n = 0
         val it = map.entries.iterator()
         val keep = LinkedHashMap<String, TrackTags>()
@@ -404,6 +408,7 @@ object MusicTags {
             if (v.liked != 0) keep[k] = TrackTags("other", "calm", 3, confidence = 0, artist = v.artist, title = v.title, album = v.album, liked = v.liked)
         }
         map.putAll(keep)
+        cache = map
         persist(context, map)
         return n
     }
@@ -411,12 +416,12 @@ object MusicTags {
     /** Снимает пометку «ИИ уже пробовал» у неразмеченных песен, чтобы разметка попробовала их ещё раз. */
     @Synchronized
     fun resetFailed(context: Context): Int {
-        val map = loaded(context)
+        val map = LinkedHashMap(loaded(context))
         var n = 0
         for ((k, v) in map.entries.toList()) {
             if (!isTagged(v) && v.aiTried) { map[k] = v.copy(aiTried = false); n++ }
         }
-        if (n > 0) persist(context, map)
+        if (n > 0) { cache = map; persist(context, map) }
         return n
     }
 

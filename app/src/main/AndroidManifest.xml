@@ -58,6 +58,8 @@
         <activity
             android:name=".PlayerActivity"
             android:exported="false"
+            android:launchMode="singleTop"
+            android:screenOrientation="portrait"
             android:label="Harmonia" />
 
         <service

@@ -188,6 +188,31 @@ object AppSettings {
         return dir in off
     }
 
+    /** Порог срабатывания пульса, %: больше значение, тем реже пульс. */
+    var onsetThreshold: Int
+        get() = if (ready()) sp.getInt("onset_thr", 100).coerceIn(50, 150) else 100
+        set(v) = sp.edit().putInt("onset_thr", v.coerceIn(50, 150)).apply()
+
+    /** Скорость нарастания свечения на ударе, 50 = как раньше. */
+    var pulseAttack: Int
+        get() = if (ready()) sp.getInt("pulse_attack", 50).coerceIn(0, 100) else 50
+        set(v) = sp.edit().putInt("pulse_attack", v.coerceIn(0, 100)).apply()
+
+    /** Скорость затухания свечения после удара, 50 = как раньше. */
+    var pulseRelease: Int
+        get() = if (ready()) sp.getInt("pulse_release", 50).coerceIn(0, 100) else 50
+        set(v) = sp.edit().putInt("pulse_release", v.coerceIn(0, 100)).apply()
+
+    /** Насколько яркость следует за пульсом, %. */
+    var brightnessPulse: Int
+        get() = if (ready()) sp.getInt("bright_pulse", 100).coerceIn(0, 150) else 100
+        set(v) = sp.edit().putInt("bright_pulse", v.coerceIn(0, 150)).apply()
+
+    /** Медленное дыхание свечения между ударами, %. */
+    var idleBreath: Int
+        get() = if (ready()) sp.getInt("idle_breath", 20).coerceIn(0, 100) else 20
+        set(v) = sp.edit().putInt("idle_breath", v.coerceIn(0, 100)).apply()
+
     fun resetAll() { if (ready()) sp.edit().clear().apply() }
 
     val coverFactor get() = floatArrayOf(0.45f, 0.6f, 0.8f)[coverSize]
