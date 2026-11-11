@@ -134,35 +134,47 @@ class SettingsActivity : AppCompatActivity() {
     private fun buildAnimation() {
         header("Анимация", big = true)
         addPreview()
-        choiceRow("Готовый стиль", listOf("Спокойный", "Обычный", "Резкий"), { -1 }) { i ->
+        choiceRow("Готовый стиль", listOf("Спокойный", "Обычный", "Резкий", "Максимум"), { -1 }) { i ->
+            // порядок: размах, плавность, нарастание, затухание, порог, пульсов/с, низкие, средние, высокие,
+            // яркость, дыхание, живость, дрожь, игра оттенка, источник, чувствительность
             val p = listOf(
-                intArrayOf(60, 80, 30, 30, 120, 1, 100, 30, 10, 70, 40),
-                intArrayOf(100, 50, 50, 50, 100, 2, 100, 50, 25, 100, 20),
-                intArrayOf(130, 20, 80, 70, 90, 3, 100, 70, 40, 120, 0)
+                intArrayOf(60, 80, 30, 30, 120, 1, 100, 30, 10, 70, 40, 30, 20, 20, 0, 100),
+                intArrayOf(100, 50, 50, 50, 100, 3, 100, 50, 25, 100, 20, 70, 40, 40, 2, 100),
+                intArrayOf(130, 20, 80, 70, 90, 4, 100, 70, 40, 120, 0, 100, 60, 60, 2, 130),
+                intArrayOf(160, 20, 90, 60, 70, 5, 120, 80, 60, 130, 10, 120, 80, 70, 2, 160)
             )[i]
             AppSettings.pulseAmplitude = p[0]; AppSettings.pulseSmooth = p[1]; AppSettings.pulseAttack = p[2]
             AppSettings.pulseRelease = p[3]; AppSettings.onsetThreshold = p[4]; AppSettings.maxPulsesPerSec = p[5]
             AppSettings.bandLow = p[6]; AppSettings.bandMid = p[7]; AppSettings.bandHigh = p[8]
-            AppSettings.brightnessPulse = p[9]; AppSettings.idleBreath = p[10]
+            AppSettings.brightnessPulse = p[9]; AppSettings.idleBreath = p[10]; AppSettings.liveliness = p[11]
+            AppSettings.shimmer = p[12]; AppSettings.hueSway = p[13]; AppSettings.pulseSource = p[14]
+            AppSettings.beatSensitivity = p[15]
             recreate()
         }
         sliderRow("Яркость свечения", 30, 100, 10, AppSettings.auraBrightness, "%") { AppSettings.auraBrightness = it }
         sliderRow("Размер свечения", 60, 150, 10, AppSettings.glowSize, "%") { AppSettings.glowSize = it }
-        sliderRow("Размах пульса", 30, 150, 10, AppSettings.pulseAmplitude, "%") { AppSettings.pulseAmplitude = it }
+        sliderRow("Размах пульса", 30, 200, 10, AppSettings.pulseAmplitude, "%") { AppSettings.pulseAmplitude = it }
         section("Ритм: вклад частот")
-        sliderRow("Низкие (удары, бас)", 0, 150, 10, AppSettings.bandLow, "%") { AppSettings.bandLow = it }
-        sliderRow("Средние (голос, гитары)", 0, 150, 10, AppSettings.bandMid, "%") { AppSettings.bandMid = it }
-        sliderRow("Высокие (тарелки, шипящие)", 0, 150, 10, AppSettings.bandHigh, "%") { AppSettings.bandHigh = it }
+        sliderRow("Низкие (удары, бас)", 0, 200, 10, AppSettings.bandLow, "%") { AppSettings.bandLow = it }
+        sliderRow("Средние (голос, гитары)", 0, 200, 10, AppSettings.bandMid, "%") { AppSettings.bandMid = it }
+        sliderRow("Высокие (тарелки, шипящие)", 0, 200, 10, AppSettings.bandHigh, "%") { AppSettings.bandHigh = it }
         section("Ритм: пульс")
-        choiceRow("Чем пульсировать", listOf("Только удары бочки", "Весь бас"), { AppSettings.pulseSource }) { AppSettings.pulseSource = it }
-        sliderRow("Пульсов в секунду не больше", 1, 4, 1, AppSettings.maxPulsesPerSec, "") { AppSettings.maxPulsesPerSec = it }
+        choiceRow("Чем пульсировать", listOf("Только удары бочки", "Весь бас", "Любые удары (живее всего)"), { AppSettings.pulseSource }) { AppSettings.pulseSource = it }
+        sliderRow("Пульсов в секунду не больше", 1, 6, 1, AppSettings.maxPulsesPerSec, "") { AppSettings.maxPulsesPerSec = it }
         sliderRow("Плавность пульса", 0, 100, 10, AppSettings.pulseSmooth, "%") { AppSettings.pulseSmooth = it }
         sliderRow("Порог срабатывания (больше, тем реже)", 50, 150, 10, AppSettings.onsetThreshold, "%") { AppSettings.onsetThreshold = it }
         sliderRow("Скорость нарастания", 0, 100, 10, AppSettings.pulseAttack, "%") { AppSettings.pulseAttack = it }
         sliderRow("Скорость затухания", 0, 100, 10, AppSettings.pulseRelease, "%") { AppSettings.pulseRelease = it }
         sliderRow("Размах яркости", 0, 150, 10, AppSettings.brightnessPulse, "%") { AppSettings.brightnessPulse = it }
         sliderRow("Дыхание между ударами", 0, 100, 10, AppSettings.idleBreath, "%") { AppSettings.idleBreath = it }
-        sliderRow("Чувствительность к ритму", 50, 150, 10, AppSettings.beatSensitivity, "%") { AppSettings.beatSensitivity = it }
+        sliderRow("Чувствительность к ритму", 50, 250, 10, AppSettings.beatSensitivity, "%") { AppSettings.beatSensitivity = it }
+        section("Живость между ударами")
+        sliderRow("Живость (набухание от баса и громкости)", 0, 150, 10, AppSettings.liveliness, "%") { AppSettings.liveliness = it }
+        sliderRow("Дрожь верхов (мерцание яркости)", 0, 100, 10, AppSettings.shimmer, "%") { AppSettings.shimmer = it }
+        sliderRow("Игра оттенка (от средних частот)", 0, 100, 10, AppSettings.hueSway, "%") { AppSettings.hueSway = it }
+        section("Диапазон частот")
+        sliderRow("Нижняя граница", 20, 200, 10, AppSettings.freqLow, " Гц") { AppSettings.freqLow = it }
+        sliderRow("Верхняя граница", 4000, 16000, 1000, AppSettings.freqHigh, " Гц") { AppSettings.freqHigh = it }
         switchRow("Пульс по темпу песни", "Держит дыхание в такт ударам и BPM песни", AppSettings.tempoLock) { AppSettings.tempoLock = it }
         choiceRow("Частота кадров", listOf("20", "30", "60"), { listOf(20, 30, 60).indexOf(AppSettings.fps).coerceAtLeast(1) }) { AppSettings.fps = listOf(20, 30, 60)[it] }
         text("Пульс настраивается здесь, цвета в разделе «Палитра». Предпросмотр показывает цвет текущей песни.", 12f, R.color.harmonia_muted).also { root.addView(it) }

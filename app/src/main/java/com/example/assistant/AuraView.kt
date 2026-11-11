@@ -57,6 +57,9 @@ class AuraView @JvmOverloads constructor(
     private val high = Onset()
 
     private var thr = 1f
+    private var swell = 0f
+    private var shimmerV = 0f
+    private var midAvg = 0f
     private var breathT = 0f
 
     private fun detect(o: Onset, v: Float, dt: Float, minGap: Float) {
@@ -144,10 +147,14 @@ class AuraView @JvmOverloads constructor(
         var raw = 0f
         if (playing && live) {
             // Три полосы со своими детекторами ударов: низкие пульсируют сильнее, средние слабее, высокие слабее всех.
-            val lowNow = if (AppSettings.pulseSource == 1) BeatSource.bass else BeatSource.kick
+            // источник 2 («любые удары») берёт рост спектра: ловит бочку, бас-линию, снейр, голос и тарелки
+            val src = AppSettings.pulseSource
+            val lowNow = when (src) { 1 -> BeatSource.bass; 2 -> maxOf(BeatSource.kick, BeatSource.fluxLow); else -> BeatSource.kick }
+            val midNow = if (src == 2) BeatSource.fluxMid else BeatSource.mid
+            val highNow = if (src == 2) BeatSource.fluxHigh else BeatSource.treble
             detect(low, lowNow, dt, minGap)
-            detect(midB, BeatSource.mid, dt, maxOf(0.3f, minGap * 0.7f))
-            detect(high, BeatSource.treble, dt, maxOf(0.25f, minGap * 0.5f))
+            detect(midB, midNow, dt, maxOf(0.3f, minGap * 0.7f))
+            detect(high, highNow, dt, maxOf(0.25f, minGap * 0.5f))
             low.bump = ema(low.bump, 0f, dt, 1f, 2.2f)
             midB.bump = ema(midB.bump, 0f, dt, 1f, 2.6f)
             high.bump = ema(high.bump, 0f, dt, 1f, 3.2f)
@@ -169,6 +176,15 @@ class AuraView @JvmOverloads constructor(
         pulse = ema(pulse, if (playing) raw else 0f, dt, (14f - 6f * smooth) * atk, (3.2f - 1.6f * smooth) * rel)
         bass = pulse
 
+        // Непрерывные движения между ударами: набухание от баса и громкости, дрожь от верхов, игра оттенка от середины.
+        val lively = AppSettings.liveliness / 100f
+        val shimmerK = AppSettings.shimmer / 100f
+        val swellRaw = if (playing && live) 0.6f * BeatSource.bass + 0.4f * BeatSource.level else 0f
+        swell = ema(swell, swellRaw, dt, 5f, 1.4f)
+        shimmerV = ema(shimmerV, if (playing && live) treble else 0f, dt, 9f, 2.5f)
+        midAvg = ema(midAvg, mid, dt, 0.4f, 0.4f)
+        val sway = ((mid - midAvg) * 2f * 18f * (AppSettings.hueSway / 100f)).coerceIn(-18f, 18f)
+
 
         val w = width.toFloat(); val h = height.toFloat()
         canvas.drawColor(BG)
@@ -179,13 +195,13 @@ class AuraView @JvmOverloads constructor(
 
         // дыхание: радиус от базового размера до базового + размах, яркость тоже чуть дышит
         val size = AppSettings.glowSize / 100f
-        val outerR = cr * (2.0f * size + 1.0f * ampScale * pulse)
-        val a = (gain * (0.50f + 0.40f * pulse * ampScale.coerceAtMost(1.2f) * (AppSettings.brightnessPulse / 100f)) * (0.85f + 0.15f * brightness)).coerceIn(0f, 1f)
+        val outerR = cr * (2.0f * size + 1.0f * ampScale * pulse + 0.35f * lively * swell * ampScale.coerceAtMost(1.5f))
+        val a = (gain * (0.50f + 0.40f * pulse * ampScale.coerceAtMost(1.2f) * (AppSettings.brightnessPulse / 100f) + 0.12f * lively * swell + 0.08f * shimmerK * shimmerV) * (0.85f + 0.15f * brightness)).coerceIn(0f, 1f)
         val f = (cr / outerR).coerceIn(0.05f, 0.9f)
 
         // оттенок задан настроением; соседние цвета расходятся от центра на фиксированные углы
         Color.colorToHSV(baseColor, hsv)
-        val hue = hsv[0]
+        val hue = hsv[0] + sway
         val sat = (AppSettings.paletteSaturation / 100f * (0.92f + 0.08f * mid)).coerceIn(0f, 1f)
         val fan = 0.15f + 1.25f * (AppSettings.paletteSpread / 100f)
         val c0 = tone(hue, sat, 1f)

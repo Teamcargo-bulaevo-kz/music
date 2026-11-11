@@ -31,6 +31,14 @@ object BeatSource {
     @Volatile var treble = 0f
         private set
 
+    /** Рост спектра (удары и атаки звука) в трёх областях, 0..1 без сглаживания: низ, середина, верх. Ловит любые инструменты. */
+    @Volatile var fluxLow = 0f
+        private set
+    @Volatile var fluxMid = 0f
+        private set
+    @Volatile var fluxHigh = 0f
+        private set
+
     /** Получает копию спектра (re, im попарно) на потоке анализатора. Ставится на время жизни экрана плеера. */
     @Volatile var fftListener: ((ByteArray) -> Unit)? = null
 
@@ -42,6 +50,10 @@ object BeatSource {
     private var midPeak = 6f
     private var kickPeak = 10f
     private var treblePeak = 4f
+    private var fluxLowPeak = 3f
+    private var fluxMidPeak = 2f
+    private var fluxHighPeak = 1.5f
+    private var prevMag = FloatArray(0)
 
     /** true, если приходят настоящие данные звука, а не условный ритм. */
     val isLive: Boolean get() = live && SystemClock.uptimeMillis() - lastRealFrame < 600
@@ -87,6 +99,9 @@ object BeatSource {
         mid = 0f
         treble = 0f
         kick = 0f
+        fluxLow = 0f
+        fluxMid = 0f
+        fluxHigh = 0f
     }
 
     private fun process(fft: ByteArray, samplingRateMilliHz: Int) {
@@ -104,14 +119,26 @@ object BeatSource {
         var midN = 0
         var trebleSum = 0f
         var trebleN = 0
+        var fLowSum = 0f; var fLowN = 0
+        var fMidSum = 0f; var fMidN = 0
+        var fHighSum = 0f; var fHighN = 0
+        if (prevMag.size != bins) prevMag = FloatArray(bins)
+        val lowCut = AppSettings.freqLow.toFloat()
+        val highCut = AppSettings.freqHigh.toFloat()
         for (k in 1 until bins) {
             val f = k * binHz
-            if (f > 8000f) break
+            if (f > highCut) break
             val m = hypot(fft[2 * k].toFloat(), fft[2 * k + 1].toFloat())
+            val grow = max(0f, m - prevMag[k])
+            prevMag[k] = m
+            if (f >= lowCut && f < 250f) { fLowSum += grow; fLowN++ }
+            else if (f >= 250f && f < 2000f) { fMidSum += grow; fMidN++ }
+            else if (f >= 2000f) { fHighSum += grow; fHighN++ }
+            if (f > 8000f) continue
             if (f in 40f..220f) { bassSum += m; bassN++ }
             if (f in 40f..110f) { kickSum += m; kickN++ }
             if (f in 300f..2000f) { midSum += m; midN++ }
-            if (f > 2000f) { trebleSum += m; trebleN++ }
+            if (f >= 2000f) { trebleSum += m; trebleN++ }
             if (f <= 4000f) { allSum += m; allN++ }
         }
         val rawBass = if (bassN > 0) bassSum / bassN else 0f
@@ -133,6 +160,16 @@ object BeatSource {
         // быстро растём на ударе, плавно затухаем
         bass = if (b > bass) bass + (b - bass) * 0.75f else bass * 0.88f + b * 0.12f
         level = if (l > level) level + (l - level) * 0.5f else level * 0.93f + l * 0.07f
+        // Рост спектра: у каждой области свой «потолок», поэтому реагирует и тихий, и громкий звук
+        val rawFL = if (fLowN > 0) fLowSum / fLowN else 0f
+        val rawFM = if (fMidN > 0) fMidSum / fMidN else 0f
+        val rawFH = if (fHighN > 0) fHighSum / fHighN else 0f
+        fluxLowPeak = max(fluxLowPeak * 0.99f, max(rawFL, 2f))
+        fluxMidPeak = max(fluxMidPeak * 0.99f, max(rawFM, 1.5f))
+        fluxHighPeak = max(fluxHighPeak * 0.99f, max(rawFH, 1f))
+        fluxLow = (rawFL / fluxLowPeak).coerceIn(0f, 1f)
+        fluxMid = (rawFM / fluxMidPeak).coerceIn(0f, 1f)
+        fluxHigh = (rawFH / fluxHighPeak).coerceIn(0f, 1f)
         lastRealFrame = SystemClock.uptimeMillis()
     }
 
@@ -144,6 +181,7 @@ object BeatSource {
             mid *= 0.95f
             treble *= 0.95f
             kick *= 0.9f
+            fluxLow *= 0.8f; fluxMid *= 0.8f; fluxHigh *= 0.8f
             return
         }
         if (isLive) return
@@ -151,5 +189,6 @@ object BeatSource {
         level *= 0.94f
         mid *= 0.94f
         treble *= 0.94f
+        fluxLow *= 0.8f; fluxMid *= 0.8f; fluxHigh *= 0.8f
     }
 }

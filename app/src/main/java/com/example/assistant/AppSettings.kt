@@ -53,8 +53,8 @@ object AppSettings {
 
     /** Размах пульса (насколько свечение расширяется и сжимается), 30..150 %. */
     var pulseAmplitude: Int
-        get() = if (ready()) sp.getInt("pulse_amp", 100).coerceIn(30, 150) else 100
-        set(v) = sp.edit().putInt("pulse_amp", v.coerceIn(30, 150)).apply()
+        get() = if (ready()) sp.getInt("pulse_amp", 100).coerceIn(30, 200) else 100
+        set(v) = sp.edit().putInt("pulse_amp", v.coerceIn(30, 200)).apply()
 
     /** Плавность пульса, 0..100: больше значит мягче и медленнее затухает. */
     var pulseSmooth: Int
@@ -63,24 +63,24 @@ object AppSettings {
 
     /** Источник пульса: 0 только удары бочки (спокойно, рекомендуется), 1 весь бас (чаще и резче). */
     var pulseSource: Int
-        get() = if (ready()) sp.getInt("pulse_source", 0).coerceIn(0, 1) else 0
-        set(v) = sp.edit().putInt("pulse_source", v.coerceIn(0, 1)).apply()
+        get() = if (ready()) sp.getInt("pulse_source", 2).coerceIn(0, 2) else 2
+        set(v) = sp.edit().putInt("pulse_source", v.coerceIn(0, 2)).apply()
 
     /** Не чаще стольких пульсов в секунду (1..4). */
     var maxPulsesPerSec: Int
-        get() = if (ready()) sp.getInt("max_pulses", 2).coerceIn(1, 4) else 2
-        set(v) = sp.edit().putInt("max_pulses", v.coerceIn(1, 4)).apply()
+        get() = if (ready()) sp.getInt("max_pulses", 3).coerceIn(1, 6) else 3
+        set(v) = sp.edit().putInt("max_pulses", v.coerceIn(1, 6)).apply()
 
     /** Вклад частот в пульс, 0..150 %: низкие (удары, бас), средние (голос, гитары), высокие (тарелки). */
     var bandLow: Int
-        get() = if (ready()) sp.getInt("band_low", 100).coerceIn(0, 150) else 100
-        set(v) = sp.edit().putInt("band_low", v.coerceIn(0, 150)).apply()
+        get() = if (ready()) sp.getInt("band_low", 100).coerceIn(0, 200) else 100
+        set(v) = sp.edit().putInt("band_low", v.coerceIn(0, 200)).apply()
     var bandMid: Int
-        get() = if (ready()) sp.getInt("band_mid", 50).coerceIn(0, 150) else 50
-        set(v) = sp.edit().putInt("band_mid", v.coerceIn(0, 150)).apply()
+        get() = if (ready()) sp.getInt("band_mid", 50).coerceIn(0, 200) else 50
+        set(v) = sp.edit().putInt("band_mid", v.coerceIn(0, 200)).apply()
     var bandHigh: Int
-        get() = if (ready()) sp.getInt("band_high", 25).coerceIn(0, 150) else 25
-        set(v) = sp.edit().putInt("band_high", v.coerceIn(0, 150)).apply()
+        get() = if (ready()) sp.getInt("band_high", 25).coerceIn(0, 200) else 25
+        set(v) = sp.edit().putInt("band_high", v.coerceIn(0, 200)).apply()
 
     /** Подстраивать пульс под темп песни (BPM) и держать его в такт ударам. */
     var tempoLock: Boolean
@@ -169,8 +169,8 @@ object AppSettings {
 
     /** Чувствительность к ритму, 50..150 %. */
     var beatSensitivity: Int
-        get() = if (ready()) sp.getInt("beat_sens", 100).coerceIn(50, 150) else 100
-        set(v) = sp.edit().putInt("beat_sens", v.coerceIn(50, 150)).apply()
+        get() = if (ready()) sp.getInt("beat_sens", 100).coerceIn(50, 250) else 100
+        set(v) = sp.edit().putInt("beat_sens", v.coerceIn(50, 250)).apply()
 
     /** Папки, которые приложение не показывает и не сканирует. */
     var disabledFolders: Set<String>
@@ -212,6 +212,31 @@ object AppSettings {
     var idleBreath: Int
         get() = if (ready()) sp.getInt("idle_breath", 20).coerceIn(0, 100) else 20
         set(v) = sp.edit().putInt("idle_breath", v.coerceIn(0, 100)).apply()
+
+    /** Живость: плавная реакция свечения на громкость и бас между ударами, %. */
+    var liveliness: Int
+        get() = if (ready()) sp.getInt("liveliness", 70).coerceIn(0, 150) else 70
+        set(v) = sp.edit().putInt("liveliness", v.coerceIn(0, 150)).apply()
+
+    /** Дрожь верхов: лёгкое мерцание яркости от высоких частот, %. */
+    var shimmer: Int
+        get() = if (ready()) sp.getInt("shimmer", 40).coerceIn(0, 100) else 40
+        set(v) = sp.edit().putInt("shimmer", v.coerceIn(0, 100)).apply()
+
+    /** Игра оттенка: небольшое смещение цвета от средних частот (до 18 градусов), %. */
+    var hueSway: Int
+        get() = if (ready()) sp.getInt("hue_sway", 40).coerceIn(0, 100) else 40
+        set(v) = sp.edit().putInt("hue_sway", v.coerceIn(0, 100)).apply()
+
+    /** Нижняя граница анализируемых частот, Гц. */
+    var freqLow: Int
+        get() = if (ready()) sp.getInt("freq_low", 30).coerceIn(20, 200) else 30
+        set(v) = sp.edit().putInt("freq_low", v.coerceIn(20, 200)).apply()
+
+    /** Верхняя граница анализируемых частот, Гц. */
+    var freqHigh: Int
+        get() = if (ready()) sp.getInt("freq_high", 12000).coerceIn(4000, 16000) else 12000
+        set(v) = sp.edit().putInt("freq_high", v.coerceIn(4000, 16000)).apply()
 
     fun resetAll() { if (ready()) sp.edit().clear().apply() }
 
