@@ -1,5 +1,6 @@
 package com.example.assistant
 
+import kotlin.math.exp
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -217,5 +218,35 @@ class LocalMoodAnalyzerTest {
             val actual = LocalMoodAnalyzer.extractFeatures(samples, rate).bpm
             assertTrue("Expected $expected +-3 BPM, got $actual", actual in (expected - 3)..(expected + 3))
         }
+    }
+    @Test fun softSteadyBeatStaysCalm() {
+        // Спокойная песня с ровным мягким битом, записанная громко: бит регулярный, но удары мягкие.
+        val calmBeat = AudioFeatures(0.10, 1800.0, 0.35, 0.03, 0.08, 0.15, 0.7, 95, 2.5, 22050, 60.0, 0.5, 0.4, attack = 0.06)
+        val result = LocalMoodAnalyzer.classify(calmBeat)
+        val s = result.scores
+        assertTrue("calm=${s["calm"]} energetic=${s["energetic"]}", s.getValue("calm") > s.getValue("energetic"))
+        assertTrue("calm=${s["calm"]} happy=${s["happy"]}", s.getValue("calm") > s.getValue("happy"))
+        assertTrue("arousal=${result.arousal}", result.arousal < 50)
+    }
+
+    @Test fun hardDrivingBeatStaysEnergetic() {
+        val hard = AudioFeatures(0.18, 4200.0, 0.25, 0.15, 0.30, 0.25, 0.6, 150, 3.0, 22050, 60.0, 0.8, 0.5, attack = 0.24)
+        val s = LocalMoodAnalyzer.classify(hard).scores
+        assertTrue("energetic=${s["energetic"]} calm=${s["calm"]}", s.getValue("energetic") > s.getValue("calm"))
+        assertTrue(s.getValue("energetic") >= 15)
+    }
+
+    @Test fun attackIsLowForSoftBeatAndHighForHardBeat() {
+        val rate = 11025
+        val random = java.util.Random(2)
+        fun signal(bpm: Double, amp: Double, decay: Double, noise: Double) = FloatArray(rate * 15) { i ->
+            val t = i.toDouble() / rate
+            val ph = t % (60.0 / bpm)
+            val pad = 0.1 * (sin(2.0 * PI * 262.0 * t) + sin(2.0 * PI * 330.0 * t) + sin(2.0 * PI * 392.0 * t))
+            (pad + amp * exp(-ph * decay) * sin(2.0 * PI * 60.0 * ph) + noise * random.nextGaussian() * (if (ph < 0.02) 1.0 else 0.0)).toFloat()
+        }
+        val soft = LocalMoodAnalyzer.extractFeatures(signal(90.0, 0.15, 12.0, 0.0), rate).attack
+        val hard = LocalMoodAnalyzer.extractFeatures(signal(140.0, 0.6, 25.0, 0.1), rate).attack
+        assertTrue("soft=$soft hard=$hard", soft >= 0.0 && hard > soft * 2)
     }
 }

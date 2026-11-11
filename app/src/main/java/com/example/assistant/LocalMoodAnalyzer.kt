@@ -11,7 +11,7 @@ import kotlin.math.*
 
 data class MoodAnalysis(val scores: Map<String, Int>, val energy: Int, val bpm: Int, val confidence: Int, val description: String, val valence: Int = 50, val arousal: Int = 50, val tension: Int = 50, val danceability: Int = 0, val segments: List<MoodSegment> = emptyList())
 data class RepeatedFragment(val firstStartSeconds: Int, val secondStartSeconds: Int, val similarity: Int)
-data class AudioFeatures(val rms: Double, val centroid: Double, val low: Double, val high: Double, val flatness: Double, val flux: Double, val beat: Double, val bpm: Int, val dynamics: Double, val count: Int, val durationSeconds: Double = 0.0, val variation: Double = 0.0, val beatAccent: Double = 0.0, val modeMajor: Double = 0.5, val tonalClarity: Double = 0.0)
+data class AudioFeatures(val rms: Double, val centroid: Double, val low: Double, val high: Double, val flatness: Double, val flux: Double, val beat: Double, val bpm: Int, val dynamics: Double, val count: Int, val durationSeconds: Double = 0.0, val variation: Double = 0.0, val beatAccent: Double = 0.0, val modeMajor: Double = 0.5, val tonalClarity: Double = 0.0, val attack: Double = -1.0)
 
 /** Локальный анализ PCM: сеть, Groq и внешние модели не используются. */
 object LocalMoodAnalyzer {
@@ -214,7 +214,7 @@ object LocalMoodAnalyzer {
 
     fun extractFeatures(x: FloatArray, sampleRate: Int): AudioFeatures {
         val n=1024;val hop=512
-        val env=ArrayList<Double>();val centers=ArrayList<Double>();val lows=ArrayList<Double>();val highs=ArrayList<Double>();val flats=ArrayList<Double>();val fluxes=ArrayList<Double>()
+        val env=ArrayList<Double>();val centers=ArrayList<Double>();val lows=ArrayList<Double>();val highs=ArrayList<Double>();val flats=ArrayList<Double>();val fluxes=ArrayList<Double>();val attacks=ArrayList<Double>()
         var sumSq=0.0;var prev=DoubleArray(n/2+1)
         for(v in x)sumSq+=v.toDouble()*v
         var pos=0
@@ -230,10 +230,10 @@ object LocalMoodAnalyzer {
                     base+=len
                 };len*=2
             }
-            var pwr=0.0;var weighted=0.0;var low=0.0;var high=0.0;var log=0.0;var count=0;var flux=0.0
-            for(bin in 1..n/2){val p=re[bin]*re[bin]+im[bin]*im[bin];val hz=bin.toDouble()*sampleRate/n;pwr+=p;weighted+=hz*p;if(hz<250)low+=p;if(hz>4000)high+=p;if(p>1e-15){log+=ln(p);count++};val mag=sqrt(p);flux+=max(0.0,mag-prev[bin]);prev[bin]=mag}
+            var pwr=0.0;var weighted=0.0;var low=0.0;var high=0.0;var log=0.0;var count=0;var flux=0.0;var magSum=0.0
+            for(bin in 1..n/2){val p=re[bin]*re[bin]+im[bin]*im[bin];val hz=bin.toDouble()*sampleRate/n;pwr+=p;weighted+=hz*p;if(hz<250)low+=p;if(hz>4000)high+=p;if(p>1e-15){log+=ln(p);count++};val mag=sqrt(p);magSum+=mag;flux+=max(0.0,mag-prev[bin]);prev[bin]=mag}
             centers.add(if(pwr>0)weighted/pwr else 0.0);lows.add(if(pwr>0)low/pwr else 0.0);highs.add(if(pwr>0)high/pwr else 0.0)
-            val ar=pwr/(n/2);flats.add(if(count>0&&ar>0)exp(log/count)/ar else 0.0);fluxes.add(flux);pos+=hop
+            val ar=pwr/(n/2);flats.add(if(count>0&&ar>0)exp(log/count)/ar else 0.0);fluxes.add(flux);if(pos>0&&magSum>1e-9)attacks.add(flux/magSum);pos+=hop
         }
         val sorted=env.sorted();val median=if(sorted.isEmpty())0.0 else sorted[sorted.size/2]
         val dynamics=if(median>1e-8)((env.maxOrNull()?:median)/median).coerceAtMost(12.0)else 1.0
@@ -244,7 +244,7 @@ object LocalMoodAnalyzer {
         val tonal = estimateMode(x, sampleRate)
         val meanEnv=env.average().coerceAtLeast(1e-9)
         val variation=if(env.isNotEmpty())sqrt(env.map{(it-meanEnv)*(it-meanEnv)}.average())/meanEnv else 0.0
-        return AudioFeatures(sqrt(sumSq/max(1,x.size)),centers.average().finiteOrZero(),lows.average().finiteOrZero(),highs.average().finiteOrZero(),flats.average().finiteOrZero(),fluxes.average().finiteOrZero(),beat.first,beat.second,dynamics,x.size,x.size.toDouble()/sampleRate,variation.finiteOrZero(),accent,tonal.first,tonal.second)
+        return AudioFeatures(sqrt(sumSq/max(1,x.size)),centers.average().finiteOrZero(),lows.average().finiteOrZero(),highs.average().finiteOrZero(),flats.average().finiteOrZero(),fluxes.average().finiteOrZero(),beat.first,beat.second,dynamics,x.size,x.size.toDouble()/sampleRate,variation.finiteOrZero(),accent,tonal.first,tonal.second,if(attacks.isEmpty())-1.0 else attacks.average().finiteOrZero())
     }
     private fun Double.finiteOrZero()=if(isFinite())this else 0.0
 
@@ -418,23 +418,28 @@ object LocalMoodAnalyzer {
     /** Процентное распределение оценок: сумма ровно 100. Это не медицинская и не объективная вероятность. */
     fun classify(f:AudioFeatures):MoodAnalysis{
         fun u(v:Double)=if(v.isFinite())v.coerceIn(0.0,1.0)else 0.0
-        val energy=.42*u((f.rms-.012)/.20)+.28*u((f.bpm-60.0)/120)+.18*u(f.flux*4)+.12*u(f.centroid/6500)
-        val bright=u(f.centroid/6500);val rhythm=u((f.beat-.07)/.55) * (.65 + .35 * u(f.beatAccent * 2.0));val smooth=1-u(f.flatness*2.2);val stable=1-u(f.dynamics/8)
+        // Резкость ударов: доля нового звука в спектре кадра. Не зависит от громкости записи и отличает мягкий бит
+        // (около 0.02-0.08) от жёсткого (около 0.2 и выше). Без неё ровный бит выглядел бодрым: beat измеряет только регулярность.
+        val sharp=if(f.attack>=0)u(f.attack/.22)else u(f.flux*3)
+        val energy=.40*u((f.rms-.02)/.18)+.20*u((f.bpm-60.0)/120)+.22*sharp+.18*u(f.centroid/6500)
+        val bright=u(f.centroid/6500);val rhythm=u((f.beat-.07)/.55) * (.65 + .35 * u(f.beatAccent * 2.0))
+        // Регулярный бит делает песню бодрой или весёлой только если он ещё и сильный.
+        val rhythmE=rhythm*(.30+.70*u(.5*energy+.5*sharp));val smooth=1-u(f.flatness*2.2);val stable=1-u(f.dynamics/8)
         val dance=if(f.bpm in 100..140)1.0 else 1-min(1.0,abs(f.bpm-120)/75.0)
         // Двухосевая модель: валентность и возбуждение дополняют, но не подменяют теги настроения.
         // Лад: положительное значение это мажор, отрицательное минор; без ясной тональности остаётся около нуля.
         val modeShift=(u(f.modeMajor)-.5)*2*u(f.tonalClarity)
         val valence=u(.32*bright+.24*smooth+.18*energy+.12*(1-u(f.low*1.8))+.14*(.5+.5*modeShift))
-        val arousal=u(.55*energy+.25*rhythm+.20*u(f.variation/2.5))
-        val tension=u(.35*f.flatness+.25*u(f.flux*3)+.22*u(f.dynamics/8)+.18*(1-smooth))
+        val arousal=u(.55*energy+.25*rhythmE+.20*u(f.variation/2.5))
+        val tension=u(.35*f.flatness+.25*sharp+.22*u(f.dynamics/8)+.18*(1-smooth))
         val danceability=u(.42*dance+.30*rhythm+.18*energy+.10*u(f.beatAccent*2.0))
         val raw=linkedMapOf(
-            "energetic" to (.12+.45*energy+.22*rhythm+.21*u(f.flux*3)),
-            "calm" to (.12+.42*(1-energy)+.24*stable+.22*(1-bright)),
-            "happy" to (.12+.30*bright+.28*energy+.22*rhythm+.08*smooth+.14*max(0.0,modeShift)),
+            "energetic" to (.12+.45*energy+.22*rhythmE+.21*sharp),
+            "calm" to (.12+.40*(1-energy)+.16*stable+.18*(1-bright)+.14*(1-sharp)),
+            "happy" to (.12+.30*bright+.28*energy+.22*rhythmE+.08*smooth+.14*max(0.0,modeShift)),
             "sad" to (.10+.38*(1-energy)+.22*(1-bright)+.18*(1-smooth)+.18*max(0.0,-modeShift)),
             "romantic" to (.12+.30*smooth+.25*(1-energy)+.18*stable+.15*(1-f.high)),
-            "dance" to (.10+.38*dance+.34*rhythm+.18*energy),
+            "dance" to (.10+.38*dance+.34*rhythm*(.6+.4*sharp)+.18*energy),
             "focus" to (.12+.34*stable+.28*(1-energy)+.18*smooth),
             "epic" to (.10+.38*energy+.24*f.dynamics.coerceAtMost(4.0)/4+.18*(1-f.low)),
             "dark" to (.10+.28*(1-bright)+.24*f.low+.22*energy+.16*f.flatness+.08*max(0.0,-modeShift))
