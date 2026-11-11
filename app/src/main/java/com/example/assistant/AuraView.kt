@@ -117,7 +117,9 @@ class AuraView @JvmOverloads constructor(
         val k = 1f - exp(-rate * dt)
         val tc = targetColor()
         if (!colorReady) { baseColor = tc; colorReady = true }
+        val prevBase = baseColor
         baseColor = ColorUtils.blendARGB(baseColor, tc, k)
+        val colorMoving = baseColor != prevBase
         brightness += (target.brightness - brightness) * k
         reactivity += (target.reactivity - reactivity) * k
 
@@ -219,7 +221,11 @@ class AuraView @JvmOverloads constructor(
             canvas.drawRect(0f, 0f, w, h, paint)
         }
         paint.shader = null
-        if (attached && visibility == VISIBLE && windowVisibility == VISIBLE) postInvalidateDelayed(1000L / AppSettings.fps)
+        if (attached && visibility == VISIBLE && windowVisibility == VISIBLE) {
+            // в покое (пауза, цвет дошёл до цели, пульс угас) кадры не нужны: проверяем 4 раза в секунду
+            val idle = !playing && pulse < 0.003f && !colorMoving
+            postInvalidateDelayed(if (idle) 250L else 1000L / AppSettings.fps)
+        }
     }
 
     private companion object {

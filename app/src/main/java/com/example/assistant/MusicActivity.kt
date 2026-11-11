@@ -86,6 +86,7 @@ class MusicActivity : AppCompatActivity() {
     private lateinit var list: RecyclerView
     private lateinit var tabs: TabLayout
     private lateinit var search: EditText
+    private val searchRun = Runnable { rebuild() }
     private lateinit var status: TextView
     private lateinit var loadingHint: TextView
     private lateinit var screenTitle: TextView
@@ -151,7 +152,8 @@ class MusicActivity : AppCompatActivity() {
             override fun onTabUnselected(tab: TabLayout.Tab) {}
             override fun onTabReselected(tab: TabLayout.Tab) { leaveDrill(); rebuild() }
         })
-        search.doAfterTextChanged { rebuild() }
+        // пересборка списка с задержкой, чтобы не тормозить на каждую букву
+        search.doAfterTextChanged { handler.removeCallbacks(searchRun); handler.postDelayed(searchRun, 250L) }
 
         findViewById<View>(R.id.moreButton).setOnClickListener { showMainMenu(it) }
         findViewById<View>(R.id.miniInfo).setOnClickListener { openPlayer() }

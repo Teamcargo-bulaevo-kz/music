@@ -21,17 +21,20 @@ object CoverLoader {
         override fun sizeOf(key: String, value: Bitmap) = value.byteCount / 1024
     }
     private val missing = HashSet<String>()
+    // Одна загрузка на картинку: при переиспользовании строки списка прошлая отменяется (вызовы только с главного потока).
+    private val jobs = java.util.WeakHashMap<ImageView, kotlinx.coroutines.Job>()
 
     fun clear() { cache.evictAll(); synchronized(missing) { missing.clear() } }
 
     fun load(scope: CoroutineScope, context: Context, track: MusicTrack, view: ImageView, px: Int) {
         val key = "${track.id}_${px}_${CoverStore.version}_${AppSettings.coverSource}"
         view.tag = key
+        jobs.remove(view)?.cancel()
         cache.get(key)?.let { view.setImageBitmap(it); return }
         view.setImageResource(R.drawable.cover_placeholder)
         if (synchronized(missing) { key in missing }) return
         val app = context.applicationContext
-        scope.launch {
+        jobs[view] = scope.launch {
             val bmp = withContext(Dispatchers.IO) { decode(app, track, px) }
             if (bmp == null) {
                 synchronized(missing) { missing.add(key) }
