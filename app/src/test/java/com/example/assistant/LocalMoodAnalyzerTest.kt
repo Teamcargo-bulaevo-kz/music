@@ -249,4 +249,27 @@ class LocalMoodAnalyzerTest {
         val hard = LocalMoodAnalyzer.extractFeatures(signal(140.0, 0.6, 25.0, 0.1), rate).attack
         assertTrue("soft=$soft hard=$hard", soft >= 0.0 && hard > soft * 2)
     }
+    @Test fun calmMajorSongIsNotHappy() {
+        // Мажор и не тёмный тембр есть и у спокойной музыки: мало атак в секунду, мягко, без верхов.
+        val calmMajor = AudioFeatures(0.06, 2600.0, 0.30, 0.05, 0.10, 0.10, 0.6, 100, 2.5, 22050, 60.0, 0.5, 0.4, 0.95, 1.0, 0.05, 1.5, 0.01)
+        val s = LocalMoodAnalyzer.classify(calmMajor).scores
+        assertTrue("calm=${s["calm"]} happy=${s["happy"]}", s.getValue("calm") > s.getValue("happy") * 1.5)
+    }
+
+    @Test fun livelyMajorSongIsHappy() {
+        val lively = AudioFeatures(0.13, 3300.0, 0.20, 0.10, 0.15, 0.15, 0.6, 125, 2.5, 22050, 60.0, 0.6, 0.5, 0.9, 0.8, 0.15, 4.5, 0.08)
+        val s = LocalMoodAnalyzer.classify(lively).scores
+        assertTrue("happy=${s["happy"]} calm=${s["calm"]}", s.getValue("happy") > s.getValue("calm"))
+    }
+
+    @Test fun onsetRateCountsAttacksPerSecond() {
+        val fps = 21.5
+        val frames = (fps * 20).toInt()
+        val flux = MutableList(frames) { 0.1 }
+        var k = 0
+        while ((k * fps * 0.5).toInt() < frames) { flux[(k * fps * 0.5).toInt()] = 1.0; k++ }
+        val rate = LocalMoodAnalyzer.estimateOnsetRate(flux, fps)
+        assertTrue("rate=$rate", rate in 1.6..2.4)
+        assertEquals(0.0, LocalMoodAnalyzer.estimateOnsetRate(MutableList(frames) { 0.3 }, fps), 0.01)
+    }
 }
